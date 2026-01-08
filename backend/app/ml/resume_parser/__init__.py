@@ -1,28 +1,61 @@
 """
-Text embedding generation and management
+Resume Parser Package
+Extracts structured information from resumes
 """
 
-import pickle
-from pathlib import Path
-from sentence_transformers import SentenceTransformer
-
-_MODEL_CACHE = {}
-
-
-def load_embedding_model(model_name='all-MiniLM-L6-v2', force_reload=False):
-    """Load embedding model with caching"""
-    if not force_reload and model_name in _MODEL_CACHE:
-        return _MODEL_CACHE[model_name]
-
-    model = SentenceTransformer(model_name)
-    _MODEL_CACHE[model_name] = model
-    return model
+from .text_extractor import TextExtractor
+from .entity_extractor import EntityExtractor
+from .skill_extractor import SkillExtractor
+from .experience_parser import ExperienceParser
+from .education_parser import EducationParser
+from .contact_extractor import ContactExtractor
 
 
-def generate_embedding(text: str, model_name='all-MiniLM-L6-v2') -> List[float]:
-    """Generate embedding for text"""
-    model = load_embedding_model(model_name)
-    return model.encode(text).tolist()
+class ResumeParser:
+    """Main resume parser that coordinates all extraction modules"""
+
+    def __init__(self):
+        self.text_extractor = TextExtractor()
+        self.entity_extractor = EntityExtractor()
+        self.skill_extractor = SkillExtractor()
+        self.experience_parser = ExperienceParser()
+        self.education_parser = EducationParser()
+        self.contact_extractor = ContactExtractor()
+
+    def parse(self, file_content: bytes, file_type: str) -> dict:
+        """
+        Parse a resume and extract all information
+
+        Args:
+            file_content: Raw file bytes
+            file_type: MIME type (application/pdf, etc.)
+
+        Returns:
+            dict: Parsed resume data
+        """
+        # Extract text
+        text = self.text_extractor.extract(file_content, file_type)
+
+        if not text:
+            return {"success": False, "error": "Could not extract text"}
+
+        # Extract all information
+        entities = self.entity_extractor.extract(text)
+        skills = self.skill_extractor.extract(text)
+        experience = self.experience_parser.parse(text)
+        education = self.education_parser.parse(text)
+        contact = self.contact_extractor.extract(text)
+
+        return {
+            "success": True,
+            "text": text,
+            "entities": entities,
+            "skills": skills,
+            "experience": experience,
+            "education": education,
+            "contact": contact
+        }
 
 
-__all__ = ["load_embedding_model", "generate_embedding"]
+__all__ = ["ResumeParser"]
+

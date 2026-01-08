@@ -10,7 +10,7 @@ def check_python_version():
     version = sys.version_info
     print(f"✓ Python {version.major}.{version.minor}.{version.micro}")
     if version.major < 3 or (version.major == 3 and version.minor < 10):
-        print("  ⚠ Warning: Python 3.10+ recommended")
+        print("Warning: Python 3.10+ recommended")
         return False
     return True
 
@@ -103,7 +103,7 @@ def main():
     # Summary
     print("=" * 50)
     if all_installed and check_env_file():
-        print("✅ All checks passed! You're ready to run the application.")
+        print("All checks passed! You're ready to run the application.")
         print()
         print("Next steps:")
         print("  1. Configure .env with your database credentials")
@@ -112,7 +112,7 @@ def main():
         print("  4. Run: python seed_data.py (optional)")
         print("  5. Run: python run.py")
     else:
-        print("❌ Some checks failed. Please install missing packages:")
+        print("Some checks failed. Please install missing packages:")
         print("   pip install -r requirements.txt")
     print("=" * 50)
 
