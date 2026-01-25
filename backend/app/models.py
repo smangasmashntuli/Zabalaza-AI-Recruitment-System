@@ -40,6 +40,8 @@ class User(Base):
     username = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255))
+    first_name = Column(String(100))
+    last_name = Column(String(100))
     role = Column(Enum(UserRole), default=UserRole.CANDIDATE)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=utc_now)
@@ -86,6 +88,11 @@ class Candidate(Base):
     # Personal Info
     phone = Column(String(20))
     location = Column(String(255))
+    title = Column(String(255))  # Professional title
+    bio = Column(Text)  # Professional bio
+    website = Column(String(500))
+    linkedin = Column(String(500))
+    github = Column(String(500))
 
     # Professional Info
     resume_path = Column(String(500))
@@ -94,6 +101,7 @@ class Candidate(Base):
     experience_years = Column(Float)
     education = Column(Text)  # JSON array of education
     work_experience = Column(Text)  # JSON array of work experience
+    certifications = Column(Text)  # JSON array of certifications
 
     # AI/ML fields
     embedding = Column(Text)  # JSON string of resume embedding

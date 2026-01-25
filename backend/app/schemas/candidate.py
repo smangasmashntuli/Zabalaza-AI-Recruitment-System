@@ -1,6 +1,34 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+
+
+class WorkExperience(BaseModel):
+    id: Optional[str] = None
+    title: str
+    company: str
+    location: Optional[str] = None
+    startDate: str
+    endDate: Optional[str] = None
+    current: bool = False
+    description: Optional[str] = None
+
+
+class Education(BaseModel):
+    id: Optional[str] = None
+    degree: str
+    school: str
+    field: Optional[str] = None
+    startDate: str
+    endDate: Optional[str] = None
+    current: bool = False
+
+
+class Certification(BaseModel):
+    id: Optional[str] = None
+    name: str
+    issuer: str
+    date: Optional[str] = None
 
 
 class CandidateBase(BaseModel):
@@ -14,12 +42,20 @@ class CandidateCreate(CandidateBase):
 
 
 class CandidateUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    title: Optional[str] = None
+    bio: Optional[str] = None
     phone: Optional[str] = None
     location: Optional[str] = None
-    skills: Optional[str] = None
+    website: Optional[str] = None
+    linkedin: Optional[str] = None
+    github: Optional[str] = None
+    skills: Optional[List[str]] = None
     experience_years: Optional[float] = None
-    education: Optional[str] = None
-    work_experience: Optional[str] = None
+    education: Optional[List[Education]] = None
+    work_experience: Optional[List[WorkExperience]] = None
+    certifications: Optional[List[Certification]] = None
 
 
 class CandidateInDBBase(CandidateBase):
@@ -39,7 +75,21 @@ class CandidateInDBBase(CandidateBase):
 
 
 class Candidate(CandidateInDBBase):
-    pass
+    # Additional fields for frontend
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    title: Optional[str] = None
+    bio: Optional[str] = None
+    website: Optional[str] = None
+    linkedin: Optional[str] = None
+    github: Optional[str] = None
+
+    # These will be parsed from JSON strings
+    skills_list: Optional[List[str]] = None
+    education_list: Optional[List[Education]] = None
+    work_experience_list: Optional[List[WorkExperience]] = None
+    certifications: Optional[List[Certification]] = None
 
 
 class ApplicationBase(BaseModel):

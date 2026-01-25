@@ -30,7 +30,55 @@ def get_my_profile(
             detail="Candidate profile not found"
         )
 
-    return candidate
+    # Convert to dict and add user info
+    candidate_dict = {
+        "id": candidate.id,
+        "user_id": candidate.user_id,
+        "email": current_user.email,
+        "first_name": current_user.first_name or "",
+        "last_name": current_user.last_name or "",
+        "phone": candidate.phone,
+        "location": candidate.location,
+        "title": candidate.title,
+        "bio": candidate.bio,
+        "website": candidate.website,
+        "linkedin": candidate.linkedin,
+        "github": candidate.github,
+        "experience_years": candidate.experience_years,
+        "resume_path": candidate.resume_path,
+        "resume_text": candidate.resume_text,
+        "profile_summary": candidate.profile_summary,
+        "created_at": candidate.created_at,
+        "updated_at": candidate.updated_at,
+    }
+
+    # Parse JSON fields
+    try:
+        candidate_dict["skills_list"] = json.loads(candidate.skills) if candidate.skills else []
+    except:
+        candidate_dict["skills_list"] = []
+
+    try:
+        candidate_dict["education_list"] = json.loads(candidate.education) if candidate.education else []
+    except:
+        candidate_dict["education_list"] = []
+
+    try:
+        candidate_dict["work_experience_list"] = json.loads(candidate.work_experience) if candidate.work_experience else []
+    except:
+        candidate_dict["work_experience_list"] = []
+
+    try:
+        candidate_dict["certifications"] = json.loads(candidate.certifications) if candidate.certifications else []
+    except:
+        candidate_dict["certifications"] = []
+
+    # Keep original JSON strings for backward compatibility
+    candidate_dict["skills"] = candidate.skills
+    candidate_dict["education"] = candidate.education
+    candidate_dict["work_experience"] = candidate.work_experience
+
+    return candidate_dict
 
 
 @router.put("/me", response_model=CandidateSchema)
@@ -48,30 +96,111 @@ def update_my_profile(
             detail="Candidate profile not found"
         )
 
-    # Update fields
+    # Update user fields
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if candidate_data.first_name is not None:
+        user.first_name = candidate_data.first_name
+    if candidate_data.last_name is not None:
+        user.last_name = candidate_data.last_name
+        user.full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+
+    # Update candidate fields
     update_data = candidate_data.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(candidate, field, value)
+
+    # Handle structured data - convert lists to JSON strings
+    if 'skills' in update_data and update_data['skills'] is not None:
+        candidate.skills = json.dumps(update_data['skills'])
+        del update_data['skills']
+
+    if 'education' in update_data and update_data['education'] is not None:
+        candidate.education = json.dumps([edu.dict() for edu in update_data['education']])
+        del update_data['education']
+
+    if 'work_experience' in update_data and update_data['work_experience'] is not None:
+        candidate.work_experience = json.dumps([exp.dict() for exp in update_data['work_experience']])
+        del update_data['work_experience']
+
+    if 'certifications' in update_data and update_data['certifications'] is not None:
+        candidate.certifications = json.dumps([cert.dict() for cert in update_data['certifications']])
+        del update_data['certifications']
+
+    # Update simple fields
+    for field in ['title', 'bio', 'phone', 'location', 'website', 'linkedin', 'github', 'experience_years']:
+        if field in update_data and update_data[field] is not None:
+            setattr(candidate, field, update_data[field])
 
     # Regenerate embedding and summary if profile changed
-    candidate_dict = {
-        'resume_text': candidate.resume_text,
-        'skills': candidate.skills,
-        'experience_years': candidate.experience_years,
-        'education': candidate.education,
-        'work_experience': candidate.work_experience
-    }
+    try:
+        candidate_dict = {
+            'resume_text': candidate.resume_text or '',
+            'skills': candidate.skills or '[]',
+            'experience_years': candidate.experience_years or 0,
+            'education': candidate.education or '[]',
+            'work_experience': candidate.work_experience or '[]'
+        }
 
-    embedding = ai_service.generate_candidate_embedding(candidate_dict)
-    candidate.embedding = json.dumps(embedding)
+        embedding = ai_service.generate_candidate_embedding(candidate_dict)
+        candidate.embedding = json.dumps(embedding)
 
-    summary = ai_service.generate_profile_summary(candidate_dict)
-    candidate.profile_summary = summary
+        summary = ai_service.generate_profile_summary(candidate_dict)
+        candidate.profile_summary = summary
+    except Exception as e:
+        print(f"Error generating embedding/summary: {e}")
+        # Continue even if AI service fails
 
     db.commit()
     db.refresh(candidate)
+    db.refresh(user)
 
-    return candidate
+    # Return the same format as get_my_profile
+    candidate_dict = {
+        "id": candidate.id,
+        "user_id": candidate.user_id,
+        "email": user.email,
+        "first_name": user.first_name or "",
+        "last_name": user.last_name or "",
+        "phone": candidate.phone,
+        "location": candidate.location,
+        "title": candidate.title,
+        "bio": candidate.bio,
+        "website": candidate.website,
+        "linkedin": candidate.linkedin,
+        "github": candidate.github,
+        "experience_years": candidate.experience_years,
+        "resume_path": candidate.resume_path,
+        "resume_text": candidate.resume_text,
+        "profile_summary": candidate.profile_summary,
+        "created_at": candidate.created_at,
+        "updated_at": candidate.updated_at,
+    }
+
+    # Parse JSON fields
+    try:
+        candidate_dict["skills_list"] = json.loads(candidate.skills) if candidate.skills else []
+    except:
+        candidate_dict["skills_list"] = []
+
+    try:
+        candidate_dict["education_list"] = json.loads(candidate.education) if candidate.education else []
+    except:
+        candidate_dict["education_list"] = []
+
+    try:
+        candidate_dict["work_experience_list"] = json.loads(candidate.work_experience) if candidate.work_experience else []
+    except:
+        candidate_dict["work_experience_list"] = []
+
+    try:
+        candidate_dict["certifications"] = json.loads(candidate.certifications) if candidate.certifications else []
+    except:
+        candidate_dict["certifications"] = []
+
+    # Keep original JSON strings
+    candidate_dict["skills"] = candidate.skills
+    candidate_dict["education"] = candidate.education
+    candidate_dict["work_experience"] = candidate.work_experience
+
+    return candidate_dict
 
 
 @router.get("/me/matches", response_model=List[JobMatch])

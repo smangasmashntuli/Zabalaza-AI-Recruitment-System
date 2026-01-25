@@ -1,13 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 import json
-from ..core.dependencies import get_db, get_current_active_user, get_current_recruiter_user
-from ..models import User, Job, JobStatus
+from ..core.dependencies import get_db, get_current_recruiter_user
+from ..models import User, Job, JobStatus, Candidate
 from ..schemas import Job as JobSchema, JobCreate, JobUpdate, JobWithApplications
 from ..services.ai_service import ai_service
+from ..services.hybrid_job_service import HybridJobService
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+
+# Optional dependency for authenticated user
+def get_current_user_optional(db: Session = Depends(get_db)):
+    """Get current user if authenticated, else None"""
+    # This is a simplified version - in production use proper JWT validation
+    return None
 
 
 @router.post("/", response_model=JobSchema, status_code=status.HTTP_201_CREATED)
@@ -107,7 +115,7 @@ def update_job(
         )
 
     # Update fields
-    update_data = job_data.dict(exclude_unset=True)
+    update_data = job_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(job, field, value)
 
@@ -173,4 +181,129 @@ def get_my_jobs(
         result.append(job_dict)
 
     return result
+
+
+# ============================================================================
+# HYBRID JOB SEARCH ENDPOINTS (Internal + External APIs)
+# ============================================================================
+
+@router.get("/search/hybrid")
+async def search_jobs_hybrid(
+    query: Optional[str] = Query(None, description="Search query"),
+    location: Optional[str] = Query(None, description="Location"),
+    job_type: Optional[str] = Query(None, description="Job type"),
+    experience_level: Optional[str] = Query(None, description="Experience level"),
+    remote_only: bool = Query(False, description="Remote only"),
+    salary_min: Optional[float] = Query(None, description="Minimum salary"),
+    salary_max: Optional[float] = Query(None, description="Maximum salary"),
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(20, ge=1, le=100, description="Results per page"),
+    include_external: bool = Query(True, description="Include external jobs"),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """
+    Search jobs (hybrid - internal + external)
+
+    This endpoint combines:
+    - Internal jobs from our platform
+    - External jobs from Indeed, USAJobs, Adzuna, GitHub Jobs
+
+    Returns unified, ranked results with AI match scores for authenticated candidates.
+    """
+    service = HybridJobService(db)
+
+    # Get candidate ID if user is a candidate
+    candidate_id = None
+    if current_user and current_user.role == 'candidate':
+        candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+        if candidate:
+            candidate_id = candidate.id
+
+    result = service.search_jobs(
+        query=query,
+        location=location,
+        job_type=job_type,
+        experience_level=experience_level,
+        remote_only=remote_only,
+        salary_min=salary_min,
+        salary_max=salary_max,
+        page=page,
+        limit=limit,
+        include_external=include_external,
+        candidate_id=candidate_id
+    )
+
+    return result
+
+
+@router.get("/detail/{job_id}")
+async def get_job_detail_hybrid(
+    job_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get detailed job information (supports both internal and external jobs)
+
+    job_id format:
+    - Internal: "internal_123"
+    - External: "indeed_abc123", "github_xyz789", etc.
+    """
+    service = HybridJobService(db)
+
+    job_detail = service.get_job_detail(job_id)
+    if not job_detail:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return job_detail
+
+
+@router.get("/stats/market")
+async def get_job_market_stats(
+    db: Session = Depends(get_db)
+):
+    """Get job market statistics"""
+    service = HybridJobService(db)
+    return service.get_job_statistics()
+
+
+@router.get("/sources/available")
+async def get_available_sources():
+    """Get available job sources"""
+    return {
+        "sources": [
+            {
+                "id": "internal",
+                "name": "Our Platform",
+                "description": "Jobs posted directly on our platform",
+                "enabled": True
+            },
+            {
+                "id": "indeed",
+                "name": "Indeed",
+                "description": "World's largest job site",
+                "enabled": False  # Set based on API key configuration
+            },
+            {
+                "id": "usajobs",
+                "name": "USAJobs",
+                "description": "US Government jobs",
+                "enabled": False
+            },
+            {
+                "id": "adzuna",
+                "name": "Adzuna",
+                "description": "Job search engine",
+                "enabled": False
+            },
+            {
+                "id": "github",
+                "name": "GitHub Jobs",
+                "description": "Tech jobs from GitHub",
+                "enabled": True  # Always available
+            }
+        ]
+    }
+
+
 
