@@ -1,4 +1,4 @@
-import { API_ENDPOINTS } from './config';
+import { API_BASE_URL, API_ENDPOINTS } from './config';
 
 /**
  * Save user data to localStorage
@@ -57,7 +57,7 @@ export const loginUser = async (email, password) => {
   } catch (error) {
     // Check if it's a network error
     if (error.message === 'Failed to fetch') {
-      throw new Error('Cannot connect to server. Please ensure the backend is running on http://localhost:8000');
+      throw new Error(`Cannot connect to server at ${API_BASE_URL}. Please ensure the backend is running and reachable.`);
     }
     throw error;
   }
@@ -96,7 +96,7 @@ export const registerUser = async (userData) => {
   } catch (error) {
     // Check if it's a network error
     if (error.message === 'Failed to fetch') {
-      throw new Error('Cannot connect to server. Please ensure the backend is running on http://localhost:8000');
+      throw new Error(`Cannot connect to server at ${API_BASE_URL}. Please ensure the backend is running and reachable.`);
     }
     throw error;
   }
