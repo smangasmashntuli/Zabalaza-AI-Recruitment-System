@@ -1,10 +1,3 @@
-/**
- * Format utilities for Dashboard
- */
-
-/**
- * Map backend application status to dashboard status
- */
 export const mapApplicationStatus = (backendStatus) => {
   const statusMap = {
     'pending': 'applied',
