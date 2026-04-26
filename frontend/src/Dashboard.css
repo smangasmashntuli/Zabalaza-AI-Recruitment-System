@@ -1353,6 +1353,295 @@ body {
   box-shadow: var(--shadow-lg);
 }
 
+/* Discover View */
+.discover-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.discover-hero,
+.discover-panel,
+.discover-section {
+  background: white;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.discover-hero {
+  padding: var(--space-2xl);
+  background: linear-gradient(135deg, var(--primary-50) 0%, white 100%);
+}
+
+.discover-hero-content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-xl);
+}
+
+.discover-kicker {
+  margin-bottom: var(--space-sm);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--primary-600);
+}
+
+.discover-title {
+  margin: 0 0 var(--space-sm);
+  font-size: 34px;
+  line-height: 1.1;
+  color: var(--gray-900);
+}
+
+.discover-subtitle {
+  max-width: 760px;
+  margin: 0;
+  color: var(--gray-600);
+  line-height: 1.6;
+}
+
+.discover-summary-card {
+  min-width: 180px;
+  padding: var(--space-lg);
+  border-radius: var(--radius-lg);
+  background: white;
+  border: 1px solid var(--primary-100);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.discover-summary-label,
+.discover-summary-meta {
+  font-size: 13px;
+  color: var(--gray-500);
+}
+
+.discover-summary-value {
+  font-size: 32px;
+  color: var(--primary-700);
+}
+
+.discover-section {
+  padding: var(--space-lg);
+}
+
+.discover-panel {
+  padding: var(--space-lg);
+}
+
+.discover-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.discover-section-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--gray-900);
+}
+
+.discover-section-header span {
+  font-size: 13px;
+  color: var(--gray-500);
+}
+
+.discover-card-grid,
+.discover-company-grid,
+.discover-tips {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.discover-card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.discover-two-column {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-xl);
+}
+
+.discover-job-card,
+.discover-list-card,
+.discover-path-card,
+.discover-company-card,
+.discover-tip-card,
+.discover-empty-card {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: var(--gray-50);
+}
+
+.discover-job-card {
+  padding: var(--space-lg);
+}
+
+.discover-job-top,
+.discover-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.discover-company-mark,
+.discover-company-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--primary-100);
+  color: var(--primary-700);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+}
+
+.discover-match-score,
+.discover-soft-badge {
+  padding: 6px 10px;
+  border-radius: var(--radius-full);
+  background: white;
+  color: var(--primary-700);
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--primary-100);
+}
+
+.discover-job-card h4,
+.discover-list-card h4 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  color: var(--gray-900);
+}
+
+.discover-company-name,
+.discover-list-card p,
+.discover-list-note {
+  margin: 0;
+  color: var(--gray-600);
+}
+
+.discover-meta-row,
+.discover-tag-row,
+.discover-paths,
+.discover-learning-list {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.discover-meta-row {
+  flex-wrap: wrap;
+  margin: var(--space-md) 0;
+}
+
+.discover-meta-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gray-600);
+  font-size: 13px;
+}
+
+.discover-tag-row {
+  flex-wrap: wrap;
+}
+
+.discover-tag {
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: white;
+  border: 1px solid var(--gray-200);
+  font-size: 12px;
+  color: var(--gray-700);
+}
+
+.discover-list-card,
+.discover-path-card,
+.discover-tip-card,
+.discover-company-card,
+.discover-empty-card {
+  padding: var(--space-md);
+}
+
+.discover-learning-list,
+.discover-paths {
+  flex-direction: column;
+}
+
+.discover-learning-item,
+.discover-tip-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: var(--gray-50);
+}
+
+.discover-learning-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--primary-100);
+  color: var(--primary-700);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.discover-path-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.discover-path-current,
+.discover-path-next {
+  font-weight: 700;
+  color: var(--gray-900);
+}
+
+.discover-path-card p {
+  margin: 0;
+  color: var(--gray-600);
+  line-height: 1.5;
+}
+
+.discover-company-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.discover-company-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.discover-empty-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  color: var(--gray-600);
+}
+
+.discover-empty-card.compact {
+  min-height: 120px;
+}
+
 /* ===================================
    RESPONSIVE DESIGN
    =================================== */
