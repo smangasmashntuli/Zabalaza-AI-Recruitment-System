@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN: str = ""
 
     # Job Search Settings
-    ENABLED_JOB_SOURCES: str = "github"  # Comma-separated: github,indeed,usajobs,adzuna
+    ENABLED_JOB_SOURCES: str = "github,adzuna"  # Comma-separated: github,indeed,usajobs,adzuna
     EXTERNAL_JOB_LIMIT: int = 100
     INTERNAL_JOB_WEIGHT: float = 1.2  # Boost for internal jobs in ranking
 

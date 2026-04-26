@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import './JobPortal.css';
-import { getJobs, searchJobs } from './api/jobs';
+import { getHybridJobs, searchHybridJobs } from './api/jobs';
 import { applyForJob } from './api/candidates';
 import { getCandidateProfile } from './api/candidates';
 
@@ -34,7 +34,7 @@ export function JobPortal() {
     try {
       setLoading(true);
       setError(null);
-      const jobsData = await getJobs({ status: 'active' });
+      const jobsData = await getHybridJobs({ limit: 50, include_external: true });
       setJobs(jobsData || []);
     } catch (err) {
       console.error('Error fetching jobs:', err);
@@ -64,10 +64,10 @@ export function JobPortal() {
         query: searchQuery,
         location: locationFilter,
         jobType: typeFilter !== 'all' ? typeFilter : undefined,
-        status: 'active'
+        limit: 50,
       };
 
-      const results = await searchJobs(searchParams);
+      const results = await searchHybridJobs(searchParams);
       setJobs(results || []);
     } catch (err) {
       console.error('Error searching jobs:', err);
@@ -84,7 +84,8 @@ export function JobPortal() {
       ? `$${(job.salary_min / 1000).toFixed(0)}k - $${(job.salary_max / 1000).toFixed(0)}k`
       : 'Competitive';
 
-    const daysAgo = Math.floor((new Date() - new Date(job.created_at)) / (1000 * 60 * 60 * 24));
+    const createdAt = job.created_at ? new Date(job.created_at) : new Date();
+    const daysAgo = Math.floor((new Date() - createdAt) / (1000 * 60 * 60 * 24));
     const posted = daysAgo === 0 ? 'Today' : daysAgo === 1 ? '1 day ago' : `${daysAgo} days ago`;
 
     // Parse requirements if it's a string
@@ -112,6 +113,7 @@ export function JobPortal() {
       benefits: skills.slice(0, 6) || ['Competitive Salary', 'Health Insurance', 'Remote Options'],
       logo: getCompanyLogo(job.title),
       matchScore: null, // Will be set if we have match data
+      company: job.company || job.recruiter?.full_name || 'Company',
     };
   };
 
@@ -129,6 +131,15 @@ export function JobPortal() {
 
   // Handle job application
   const handleApply = async (job) => {
+    if (job.source && job.source !== 'internal') {
+      if (job.apply_url) {
+        window.open(job.apply_url, '_blank', 'noopener,noreferrer');
+      } else {
+        alert('This external job must be applied on the provider website.');
+      }
+      return;
+    }
+
     if (!candidateProfile) {
       alert('Please complete your profile before applying to jobs');
       return;
@@ -146,8 +157,17 @@ export function JobPortal() {
     try {
       setApplying(true);
 
+      if (selectedJob.source && selectedJob.source !== 'internal') {
+        if (selectedJob.apply_url) {
+          window.open(selectedJob.apply_url, '_blank', 'noopener,noreferrer');
+        }
+        setShowApplicationModal(false);
+        setSelectedJob(null);
+        return;
+      }
+
       await applyForJob({
-        job_id: selectedJob.id,
+        job_id: selectedJob.job_id || selectedJob.id,
         cover_letter: applicationData.coverLetter || `Application for ${selectedJob.title}`
       });
 
@@ -165,8 +185,8 @@ export function JobPortal() {
   const filteredJobs = jobs.filter(job => {
     const formattedJob = formatJob(job);
     const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (job.recruiter?.full_name || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesLocation = !locationFilter || job.location.toLowerCase().includes(locationFilter.toLowerCase());
+                          (formattedJob.company || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesLocation = !locationFilter || (job.location || '').toLowerCase().includes(locationFilter.toLowerCase());
     const matchesType = typeFilter === 'all' || formattedJob.type.toLowerCase() === typeFilter.toLowerCase();
     return matchesSearch && matchesLocation && matchesType;
   });
@@ -323,7 +343,7 @@ export function JobPortal() {
                       </div>
                     )}
                   </div>
-                  <p className="job-company">{job.recruiter?.full_name || 'Company'}</p>
+                  <p className="job-company">{formattedJob.company}</p>
                 </div>
               </div>
 
@@ -382,7 +402,7 @@ export function JobPortal() {
                         </div>
                         <div>
                           <h2 className="modal-job-title">{selectedJob.title}</h2>
-                          <p className="modal-job-company">{selectedJob.recruiter?.full_name || 'Company'}</p>
+                          <p className="modal-job-company">{formattedJob.company}</p>
                           {formattedJob.matchScore && (
                             <div className="modal-match-info">
                               <span className="icon">⭐</span>
@@ -492,8 +512,8 @@ export function JobPortal() {
             <div className="modal-header">
               <div className="modal-header-content">
                 <div>
-                  <h2 className="modal-job-title">Apply to {selectedJob.title}</h2>
-                  <p className="modal-job-company">{selectedJob.recruiter?.full_name || 'Company'}</p>
+                          <h2 className="modal-job-title">Apply to {selectedJob.title}</h2>
+                          <p className="modal-job-company">{selectedJob.company || selectedJob.recruiter?.full_name || 'Company'}</p>
                 </div>
                 <button
                   onClick={() => setShowApplicationModal(false)}
