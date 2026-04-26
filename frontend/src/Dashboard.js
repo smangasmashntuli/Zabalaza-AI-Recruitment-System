@@ -13,7 +13,10 @@ function Dashboard({ onLogout }) {
   const [activeView, setActiveView] = useState('overview');
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchLocation, setSearchLocation] = useState('');
   const [showProfile, setShowProfile] = useState(false);
+  const [candidateProfile, setCandidateProfile] = useState(null);
+  const [showBusinessMenu, setShowBusinessMenu] = useState(false);
 
   // Dynamic data state
   const [loading, setLoading] = useState(true);
@@ -44,6 +47,7 @@ function Dashboard({ onLogout }) {
 
       // Fetch candidate profile
       const profile = await getCandidateProfile();
+      setCandidateProfile(profile);
 
       // Fetch applications with job details
       const apps = await getMyApplications();
@@ -82,8 +86,7 @@ function Dashboard({ onLogout }) {
       // Set user profile data
       setUserProfile({
         name: currentUser.full_name || currentUser.username,
-        title: profile.work_experience ?
-          JSON.parse(profile.work_experience)[0]?.title || 'Job Seeker' : 'Job Seeker',
+        title: profile.title || profile.profile_summary || currentUser.email || currentUser.username,
         avatar: getUserInitials(currentUser.full_name || currentUser.username),
         profileComplete: calculateProfileCompletion(profile)
       });
@@ -152,7 +155,7 @@ function Dashboard({ onLogout }) {
   // Fallback data if no data loaded
   const displayUserProfile = userProfile || {
     name: 'User',
-    title: 'Job Seeker',
+    title: 'Profile incomplete',
     avatar: 'U',
     profileComplete: 0
   };
@@ -173,6 +176,49 @@ function Dashboard({ onLogout }) {
       'rejected': { label: 'Not Selected', color: 'gray', icon: 'close' }
     };
     return statusMap[status] || statusMap['applied'];
+  };
+
+  const profileChecklist = [
+    {
+      label: 'Complete basic information',
+      completed: Boolean(candidateProfile?.phone && candidateProfile?.location),
+    },
+    {
+      label: 'Add work experience',
+      completed: Boolean(candidateProfile?.work_experience_list?.length),
+    },
+    {
+      label: 'Upload resume',
+      completed: Boolean(candidateProfile?.resume_path || candidateProfile?.resume_text),
+    },
+    {
+      label: 'Add certifications',
+      completed: Boolean(candidateProfile?.certifications?.length),
+    },
+  ];
+
+  const dynamicNotificationCount =
+    insights.length +
+    profileChecklist.filter((item) => !item.completed).length +
+    (recommendations.length > 0 ? 1 : 0);
+
+  const businessActions = [
+    { label: 'Post a job', description: 'Recruiters can publish a new opening on Career Hub.' },
+    { label: 'Create a Company Page', description: 'Create a company page and submit it for verification.' },
+    { label: 'Hire on Career Hub', description: 'Start the hiring workflow and manage applicants.' },
+  ];
+
+  const handleFindJobs = () => {
+    setActiveView('jobs');
+  };
+
+  const handleBusinessAction = (label) => {
+    setShowBusinessMenu(false);
+    if (label === 'Create a Company Page') {
+      alert('Company page creation will require verification before it is published.');
+      return;
+    }
+    alert(`${label} is available from the business workflow.`);
   };
 
   // SVG Icons Library
@@ -256,11 +302,33 @@ function Dashboard({ onLogout }) {
           <div className="header-right">
             <button className="icon-button">
               <Icon name="bell" size={20} />
-              {insights.length > 0 && <span className="notification-badge">{insights.length}</span>}
+              {dynamicNotificationCount > 0 && <span className="notification-badge">{dynamicNotificationCount}</span>}
             </button>
             <button className="icon-button">
               <Icon name="settings" size={20} />
             </button>
+            <div className="business-menu-wrapper">
+              <button
+                className={`icon-button business-trigger ${showBusinessMenu ? 'open' : ''}`}
+                onClick={() => setShowBusinessMenu((current) => !current)}
+              >
+                <Icon name="briefcase" size={20} />
+              </button>
+              {showBusinessMenu && (
+                <div className="business-dropdown">
+                  {businessActions.map((action) => (
+                    <button
+                      key={action.label}
+                      className="business-dropdown-item"
+                      onClick={() => handleBusinessAction(action.label)}
+                    >
+                      <span className="business-dropdown-title">{action.label}</span>
+                      <span className="business-dropdown-description">{action.description}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="user-profile-header" onClick={() => setShowProfile(true)}>
               <div className="user-avatar-small">{displayUserProfile.avatar}</div>
               <div className="user-info-small">
@@ -283,7 +351,11 @@ function Dashboard({ onLogout }) {
         <div className="content-wrapper">
 
         {activeView === 'jobs' ? (
-            <JobPortal onCompleteProfile={() => setShowProfile(true)} />
+            <JobPortal
+              onCompleteProfile={() => setShowProfile(true)}
+              initialSearchQuery={searchQuery}
+              initialLocation={searchLocation}
+            />
           ) : activeView === 'applications' ? (
             <Applications />
           ) : (
@@ -297,17 +369,29 @@ function Dashboard({ onLogout }) {
 
               <div className="search-bar-container">
                 <div className="search-bar">
-                  <Icon name="search" size={20} />
-                  <input
-                    type="text"
-                    placeholder="Search by job title, company, or keyword..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="search-input"
-                  />
-                  <button className="filter-button">
-                    <Icon name="filter" size={18} />
-                    Filters
+                  <div className="search-segment">
+                    <Icon name="search" size={20} />
+                    <input
+                      type="text"
+                      placeholder="Search by job title"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="search-input"
+                    />
+                  </div>
+                  <div className="search-divider"></div>
+                  <div className="search-segment">
+                    <Icon name="location" size={20} />
+                    <input
+                      type="text"
+                      placeholder="Location"
+                      value={searchLocation}
+                      onChange={(e) => setSearchLocation(e.target.value)}
+                      className="search-input"
+                    />
+                  </div>
+                  <button className="find-jobs-button" onClick={handleFindJobs}>
+                    Find Jobs
                   </button>
                 </div>
               </div>
@@ -324,7 +408,7 @@ function Dashboard({ onLogout }) {
                   </div>
                   <span className={`metric-badge ${displayAnalytics.applications.positive ? 'positive' : 'negative'}`}>
                     <Icon name="trending" size={14} />
-                    +{displayAnalytics.applications.change}%
+                    {displayAnalytics.applications.change >= 0 ? '+' : ''}{displayAnalytics.applications.change}
                   </span>
                 </div>
                 <div className="metric-body">
@@ -341,7 +425,7 @@ function Dashboard({ onLogout }) {
                   </div>
                   <span className={`metric-badge ${displayAnalytics.interviews.positive ? 'positive' : 'negative'}`}>
                     <Icon name="trending" size={14} />
-                    +{displayAnalytics.interviews.change}
+                    {displayAnalytics.interviews.change >= 0 ? '+' : ''}{displayAnalytics.interviews.change}
                   </span>
                 </div>
                 <div className="metric-body">
@@ -358,7 +442,7 @@ function Dashboard({ onLogout }) {
                   </div>
                   <span className={`metric-badge ${displayAnalytics.responseRate.positive ? 'positive' : 'negative'}`}>
                     <Icon name="trending" size={14} />
-                    +{displayAnalytics.responseRate.change}%
+                    {displayAnalytics.responseRate.change >= 0 ? '+' : ''}{displayAnalytics.responseRate.change}%
                   </span>
                 </div>
                 <div className="metric-body">
@@ -375,7 +459,7 @@ function Dashboard({ onLogout }) {
                   </div>
                   <span className={`metric-badge ${displayAnalytics.offers.positive ? 'positive' : 'negative'}`}>
                     <Icon name="trending" size={14} />
-                    +{displayAnalytics.offers.change}
+                    {displayAnalytics.offers.change >= 0 ? '+' : ''}{displayAnalytics.offers.change}
                   </span>
                 </div>
                 <div className="metric-body">
@@ -598,26 +682,14 @@ function Dashboard({ onLogout }) {
                 </div>
 
                 <div className="profile-tasks">
-                  <div className="task-item completed">
-                    <div className="task-check">
-                      <Icon name="check" size={14} />
+                  {profileChecklist.map((item) => (
+                    <div key={item.label} className={`task-item ${item.completed ? 'completed' : ''}`}>
+                      <div className={`task-check ${item.completed ? '' : 'empty'}`}>
+                        {item.completed && <Icon name="check" size={14} />}
+                      </div>
+                      <span>{item.label}</span>
                     </div>
-                    <span>Complete basic information</span>
-                  </div>
-                  <div className="task-item completed">
-                    <div className="task-check">
-                      <Icon name="check" size={14} />
-                    </div>
-                    <span>Add work experience</span>
-                  </div>
-                  <div className="task-item">
-                    <div className="task-check empty"></div>
-                    <span>Upload portfolio projects</span>
-                  </div>
-                  <div className="task-item">
-                    <div className="task-check empty"></div>
-                    <span>Add certifications</span>
-                  </div>
+                  ))}
                 </div>
 
                 <button className="complete-profile-button" onClick={() => setShowProfile(true)}>
@@ -628,7 +700,7 @@ function Dashboard({ onLogout }) {
 
               {/* Quick Actions */}
               <div className="sidebar-card quick-actions-card">
-                <h3 className="sidebar-title">Quick Actions</h3>
+                <h3 className="sidebar-title quick-actions-title">Quick Actions</h3>
                 <div className="quick-actions">
                   <button className="quick-action-btn">
                     <Icon name="plus" size={18} />
