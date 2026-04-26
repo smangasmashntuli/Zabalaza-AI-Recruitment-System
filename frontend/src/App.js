@@ -3,6 +3,7 @@ import './App.css';
 import Login from './Login';
 import SignUp from './SignUp';
 import Dashboard from './Dashboard';
+import { AUTH_CHANGED_EVENT, isAuthenticated as hasValidSession, logoutUser } from './api/auth';
 
 function App() {
   const [showLogin, setShowLogin] = useState(true);
@@ -11,23 +12,26 @@ function App() {
 
   // Check if user is authenticated on mount
   useEffect(() => {
-    const checkAuth = () => {
-      const token = localStorage.getItem('access_token');
-      setIsAuthenticated(!!token);
+    const syncAuthState = () => {
+      setIsAuthenticated(hasValidSession());
       setIsLoading(false);
     };
 
-    checkAuth();
+    syncAuthState();
 
     // Listen for storage changes (login/logout from other tabs)
-    window.addEventListener('storage', checkAuth);
-    return () => window.removeEventListener('storage', checkAuth);
+    window.addEventListener('storage', syncAuthState);
+    window.addEventListener(AUTH_CHANGED_EVENT, syncAuthState);
+
+    return () => {
+      window.removeEventListener('storage', syncAuthState);
+      window.removeEventListener(AUTH_CHANGED_EVENT, syncAuthState);
+    };
   }, []);
 
   // Handle logout
   const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+    logoutUser();
     setIsAuthenticated(false);
     setShowLogin(true);
   };
@@ -35,13 +39,8 @@ function App() {
   // Show loading state
   if (isLoading) {
     return (
-      <div className="App" style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh'
-      }}>
-        <div>Loading...</div>
+      <div className="App app-loading">
+        <div className="app-loading-card">Loading...</div>
       </div>
     );
   }

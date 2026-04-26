@@ -64,6 +64,56 @@
   gap: var(--space-lg);
 }
 
+.applications-state {
+  padding: 56px 24px;
+  text-align: center;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  background: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.applications-state-icon {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 16px;
+  border-radius: 18px;
+  background: var(--primary-50);
+  color: var(--primary-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.applications-state-title {
+  margin: 0 0 8px;
+  font-size: 24px;
+  color: var(--gray-900);
+}
+
+.applications-state-text {
+  margin: 0 0 24px;
+  color: var(--gray-500);
+}
+
+.applications-state-error {
+  color: var(--error-500);
+}
+
+.applications-state-button {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 12px;
+  background: var(--primary-600);
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.applications-state-button:hover {
+  background: var(--primary-700);
+}
+
 .section-title {
   font-size: 20px;
   font-weight: 600;

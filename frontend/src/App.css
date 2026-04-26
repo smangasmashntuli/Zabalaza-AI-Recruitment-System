@@ -1,4 +1,26 @@
-.App{
+.App {
+  min-height: 100vh;
   margin: 0;
   padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.app-loading {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-muted);
+}
+
+.app-loading-card {
+  min-width: 220px;
+  padding: 28px 32px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-soft);
+  text-align: center;
+  color: var(--color-text-muted);
 }

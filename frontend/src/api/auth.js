@@ -1,11 +1,48 @@
 import { API_ENDPOINTS } from './config';
 
+const AUTH_EVENT = 'auth:changed';
+
+const emitAuthChange = () => {
+  window.dispatchEvent(new Event(AUTH_EVENT));
+};
+
+const parseTokenPayload = (token) => {
+  if (!token) return null;
+
+  try {
+    const base64Url = token.split('.')[1];
+    if (!base64Url) return null;
+
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error('Error decoding token:', error);
+    return null;
+  }
+};
+
+const isTokenExpired = (token) => {
+  const payload = parseTokenPayload(token);
+  if (!payload?.exp) return false;
+
+  const nowInSeconds = Math.floor(Date.now() / 1000);
+  return payload.exp <= nowInSeconds;
+};
+
 /**
  * Save user data to localStorage
  * @param {Object} userData - User data to store
  */
 export const setCurrentUser = (userData) => {
   localStorage.setItem('user_data', JSON.stringify(userData));
+  emitAuthChange();
 };
 
 /**
@@ -50,6 +87,8 @@ export const loginUser = async (email, password) => {
       // Store user data if provided
       if (data.user) {
         setCurrentUser(data.user);
+      } else {
+        emitAuthChange();
       }
     }
 
@@ -110,6 +149,7 @@ export const logoutUser = () => {
   localStorage.removeItem('refresh_token');
   localStorage.removeItem('token_type');
   localStorage.removeItem('user_data');
+  emitAuthChange();
 };
 
 /**
@@ -117,7 +157,15 @@ export const logoutUser = () => {
  * @returns {string|null} - Access token
  */
 export const getAccessToken = () => {
-  return localStorage.getItem('access_token');
+  const token = localStorage.getItem('access_token');
+  if (!token) return null;
+
+  if (isTokenExpired(token)) {
+    logoutUser();
+    return null;
+  }
+
+  return token;
 };
 
 /**
@@ -144,16 +192,8 @@ export const getCurrentUser = () => {
     }
 
     // Decode JWT token to get user info
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-
-    const payload = JSON.parse(jsonPayload);
+    const payload = parseTokenPayload(token);
+    if (!payload) return null;
 
     // Return user data from token
     return {
@@ -168,3 +208,5 @@ export const getCurrentUser = () => {
     return null;
   }
 };
+
+export const AUTH_CHANGED_EVENT = AUTH_EVENT;

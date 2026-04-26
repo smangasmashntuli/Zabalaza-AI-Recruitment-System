@@ -1,4 +1,4 @@
-import { getAccessToken } from './auth';
+import { getAccessToken, logoutUser } from './auth';
 
 /**
  * Make an authenticated API request
@@ -28,10 +28,21 @@ export const apiRequest = async (url, options = {}) => {
   };
 
   const response = await fetch(url, config);
-  const data = await response.json();
+
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (error) {
+    data = null;
+  }
+
+  if (response.status === 401) {
+    logoutUser();
+    throw new Error('Your session has expired. Please log in again.');
+  }
 
   if (!response.ok) {
-    throw new Error(data.detail || 'API request failed');
+    throw new Error(data?.detail || 'API request failed');
   }
 
   return data;

@@ -19,16 +19,15 @@ function Dashboard({ onLogout }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
-  const [candidateProfile, setCandidateProfile] = useState(null);
   const [applications, setApplications] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [insights, setInsights] = useState([]);
-  const [allJobs, setAllJobs] = useState([]);
 
   // Fetch all data on component mount
   useEffect(() => {
     fetchDashboardData().then(r => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchDashboardData = async () => {
@@ -39,20 +38,18 @@ function Dashboard({ onLogout }) {
       // Fetch user data
       const currentUser = getCurrentUser();
       if (!currentUser) {
-        window.location.href = '/login';
+        onLogout?.();
         return;
       }
 
       // Fetch candidate profile
       const profile = await getCandidateProfile();
-      setCandidateProfile(profile);
 
       // Fetch applications with job details
       const apps = await getMyApplications();
 
       // Fetch all jobs to get details for applications
       const jobs = await getJobs();
-      setAllJobs(jobs);
 
       // Format applications with job details
       const formattedApps = apps.map(app => {
@@ -93,6 +90,10 @@ function Dashboard({ onLogout }) {
 
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
+      if (/session has expired|validate credentials/i.test(err.message || '')) {
+        onLogout?.();
+        return;
+      }
       setError(err.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
@@ -269,17 +270,7 @@ function Dashboard({ onLogout }) {
             </div>
             <button
               onClick={onLogout}
-              style={{
-                marginLeft: '12px',
-                padding: '8px 16px',
-                background: '#ef4444',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '500'
-              }}
+              className="logout-button"
             >
               Logout
             </button>

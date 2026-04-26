@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
 /* Modal Overlay */
 .profile-modal-overlay {
   position: fixed;
@@ -74,7 +72,7 @@
   font-size: 28px;
   font-weight: 800;
   margin: 0 0 8px 0;
-  font-family: 'Inter', sans-serif;
+  font-family: Arial, Helvetica, sans-serif;
   letter-spacing: -0.5px;
 }
 
@@ -100,7 +98,7 @@
   border-radius: 12px;
   font-size: 14px;
   font-weight: 600;
-  font-family: 'Inter', sans-serif;
+  font-family: Arial, Helvetica, sans-serif;
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -119,14 +117,14 @@
 }
 
 .profile-action-button.save {
-  background: #22c55e;
+  background: #2563eb;
   color: white;
 }
 
 .profile-action-button.save:hover {
-  background: #16a34a;
+  background: #1d4ed8;
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.3);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
 }
 
 .profile-close-button {
@@ -168,7 +166,7 @@
   color: rgba(255, 255, 255, 0.7);
   font-size: 14px;
   font-weight: 600;
-  font-family: 'Inter', sans-serif;
+  font-family: Arial, Helvetica, sans-serif;
   border-bottom: 3px solid transparent;
   cursor: pointer;
   transition: all 0.2s;
@@ -192,6 +190,33 @@
   overflow-y: auto;
   padding: 32px;
   background: #f8fafc;
+}
+
+.profile-state {
+  padding: 48px 24px;
+  text-align: center;
+  border: 1px solid #d1d5db;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.profile-state.error {
+  color: #dc2626;
+}
+
+.profile-state-button {
+  margin-top: 16px;
+  padding: 10px 16px;
+  border: 1px solid #2563eb;
+  border-radius: 10px;
+  background: #2563eb;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.profile-state-button:hover {
+  background: #1d4ed8;
 }
 
 .profile-tab-content {

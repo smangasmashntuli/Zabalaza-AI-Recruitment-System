@@ -228,13 +228,13 @@ function CandidateProfile({ onClose }) {
         {/* Content */}
         <div className="profile-content">
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px' }}>
+            <div className="profile-state">
               <p>Loading profile...</p>
             </div>
           ) : error ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: 'red' }}>
+            <div className="profile-state error">
               <p>{error}</p>
-              <button onClick={loadProfile} style={{ marginTop: '20px' }}>Retry</button>
+              <button onClick={loadProfile} className="profile-state-button">Retry</button>
             </div>
           ) : profile && (
             <>
