@@ -32,7 +32,7 @@ const getInitials = (value) =>
     .map((part) => part[0]?.toUpperCase())
     .join('') || 'CO';
 
-export default function JobPortal() {
+export default function JobPortal({ onCompleteProfile }) {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -44,6 +44,8 @@ export default function JobPortal() {
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applicationData, setApplicationData] = useState({ coverLetter: '' });
+
+  const hasResumeProfile = Boolean(candidateProfile?.resume_path || candidateProfile?.resume_text);
 
   useEffect(() => {
     fetchJobsData();
@@ -195,6 +197,26 @@ export default function JobPortal() {
           <h2 className="job-portal-state-title">Error Loading Jobs</h2>
           <p className="job-portal-state-text">{error}</p>
           <button onClick={fetchJobsData} className="job-portal-state-button">Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasResumeProfile) {
+    return (
+      <div className="job-portal">
+        <div className="job-portal-state">
+          <div className="job-portal-state-icon"><Icon name="briefcase" size={30} /></div>
+          <h2 className="job-portal-state-title">Complete your profile</h2>
+          <p className="job-portal-state-text">
+            Upload your CV or resume so the system can extract your education, experience, and skills before recommending jobs.
+          </p>
+          <button
+            onClick={() => onCompleteProfile?.()}
+            className="job-portal-state-button"
+          >
+            Complete Profile
+          </button>
         </div>
       </div>
     );

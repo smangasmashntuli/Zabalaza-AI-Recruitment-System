@@ -70,10 +70,26 @@ async def upload_resume(
     candidate.experience_years = parsed_data.get('experience_years', 0.0)
     candidate.education = json.dumps(parsed_data.get('education', []))
     candidate.work_experience = json.dumps(parsed_data.get('work_experience', []))
+    candidate.certifications = json.dumps(parsed_data.get('certifications', []))
+
+    if parsed_data.get('location'):
+        candidate.location = parsed_data.get('location')
+
+    if parsed_data.get('title'):
+        candidate.title = parsed_data.get('title')
 
     # Update phone if found and not already set
-    if not candidate.phone and parsed_data.get('phone'):
+    if parsed_data.get('phone'):
         candidate.phone = parsed_data.get('phone')
+
+    if parsed_data.get('first_name'):
+        current_user.first_name = parsed_data.get('first_name')
+    if parsed_data.get('last_name'):
+        current_user.last_name = parsed_data.get('last_name')
+
+    full_name = parsed_data.get('full_name')
+    if full_name:
+        current_user.full_name = full_name
 
     # Generate embedding for the candidate
     candidate_dict = {
@@ -81,7 +97,8 @@ async def upload_resume(
         'skills': candidate.skills,
         'experience_years': candidate.experience_years,
         'education': candidate.education,
-        'work_experience': candidate.work_experience
+        'work_experience': candidate.work_experience,
+        'location': candidate.location,
     }
 
     embedding = ai_service.generate_candidate_embedding(candidate_dict)

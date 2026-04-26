@@ -283,7 +283,7 @@ function Dashboard({ onLogout }) {
         <div className="content-wrapper">
 
         {activeView === 'jobs' ? (
-            <JobPortal />
+            <JobPortal onCompleteProfile={() => setShowProfile(true)} />
           ) : activeView === 'applications' ? (
             <Applications />
           ) : (
