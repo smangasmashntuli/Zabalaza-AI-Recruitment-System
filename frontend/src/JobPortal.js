@@ -32,7 +32,7 @@ const getInitials = (value) =>
     .map((part) => part[0]?.toUpperCase())
     .join('') || 'CO';
 
-export default function JobPortal({ onCompleteProfile }) {
+export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', initialLocation = '' }) {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -51,6 +51,14 @@ export default function JobPortal({ onCompleteProfile }) {
     fetchJobsData();
     fetchCandidateData();
   }, []);
+
+  useEffect(() => {
+    setSearchQuery(initialSearchQuery || '');
+  }, [initialSearchQuery]);
+
+  useEffect(() => {
+    setLocationFilter(initialLocation || '');
+  }, [initialLocation]);
 
   const fetchJobsData = async () => {
     try {
