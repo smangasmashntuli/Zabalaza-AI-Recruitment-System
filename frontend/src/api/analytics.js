@@ -8,25 +8,36 @@
  */
 export const calculateAnalytics = (applications) => {
   const now = new Date();
-  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-
-  // Count applications by time period
   const totalApplications = applications.length;
-  const lastMonthApplications = applications.filter(app =>
-    new Date(app.applied_at) >= lastMonth
-  ).length;
+  const last30Days = new Date(now);
+  last30Days.setDate(now.getDate() - 30);
+  const previous30Days = new Date(now);
+  previous30Days.setDate(now.getDate() - 60);
 
-  // Count interviews
+  const currentWindow = applications.filter(app => {
+    const appliedAt = new Date(app.applied_at || app.appliedAt || app.date);
+    return appliedAt >= last30Days;
+  });
+
+  const previousWindow = applications.filter(app => {
+    const appliedAt = new Date(app.applied_at || app.appliedAt || app.date);
+    return appliedAt >= previous30Days && appliedAt < last30Days;
+  });
+
   const interviews = applications.filter(app =>
-    app.status === 'interview' || app.status === 'shortlisted'
+    ['interview', 'shortlisted', 'interview_scheduled'].includes(app.status)
+  ).length;
+  const previousInterviews = previousWindow.filter(app =>
+    ['interview', 'shortlisted', 'interview_scheduled'].includes(app.status)
   ).length;
 
-  // Count offers
   const offers = applications.filter(app =>
     app.status === 'accepted' || app.status === 'offer_received'
   ).length;
+  const previousOffers = previousWindow.filter(app =>
+    app.status === 'accepted' || app.status === 'offer_received'
+  ).length;
 
-  // Calculate response rate (reviewed or better vs total)
   const responded = applications.filter(app =>
     app.status !== 'pending'
   ).length;
@@ -34,30 +45,37 @@ export const calculateAnalytics = (applications) => {
     ? Math.round((responded / totalApplications) * 100)
     : 0;
 
+  const previousResponded = previousWindow.filter(app => app.status !== 'pending').length;
+  const previousResponseRate = previousWindow.length > 0
+    ? Math.round((previousResponded / previousWindow.length) * 100)
+    : 0;
+
+  const calculateDelta = (currentValue, previousValue) => currentValue - previousValue;
+
   return {
     applications: {
       value: totalApplications,
-      change: lastMonthApplications,
+      change: calculateDelta(currentWindow.length, previousWindow.length),
       period: 'vs last month',
-      positive: lastMonthApplications > 0
+      positive: currentWindow.length >= previousWindow.length
     },
     interviews: {
       value: interviews,
-      change: interviews,
+      change: calculateDelta(interviews, previousInterviews),
       period: 'scheduled',
-      positive: interviews > 0
+      positive: interviews >= previousInterviews
     },
     responseRate: {
       value: responseRate,
-      change: 5, // Could be calculated from historical data
+      change: calculateDelta(responseRate, previousResponseRate),
       period: 'vs average',
-      positive: responseRate >= 50
+      positive: responseRate >= previousResponseRate
     },
     offers: {
       value: offers,
-      change: offers,
+      change: calculateDelta(offers, previousOffers),
       period: 'pending',
-      positive: offers > 0
+      positive: offers >= previousOffers
     }
   };
 };
