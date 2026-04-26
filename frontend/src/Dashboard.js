@@ -208,6 +208,46 @@ function Dashboard({ onLogout }) {
     { label: 'Hire on Career Hub', description: 'Start the hiring workflow and manage applicants.' },
   ];
 
+  const candidateSkills = candidateProfile?.skills_list || [];
+  const topRecommendations = recommendations.slice(0, 3);
+  const nearMatches = recommendations
+    .filter((job) => job.match >= 55 && job.match < 80)
+    .slice(0, 3)
+    .map((job) => ({
+      ...job,
+      missingSkills: job.tags.filter((tag) => !candidateSkills.includes(tag)).slice(0, 3),
+    }));
+
+  const targetCompanies = Array.from(
+    new Set(recommendations.map((job) => job.company).filter(Boolean))
+  ).slice(0, 4);
+
+  const careerPaths = [
+    {
+      title: candidateProfile?.title || 'Current Profile',
+      next: topRecommendations[0]?.position || 'Senior Specialist',
+      description: 'Best next-step role based on your strongest current match.',
+    },
+    {
+      title: topRecommendations[0]?.position || 'Growth Role',
+      next: topRecommendations[1]?.position || 'Leadership Track',
+      description: 'A second role to consider as your profile expands.',
+    },
+  ];
+
+  const learningRecommendations = [
+    ...new Set(
+      nearMatches.flatMap((job) => job.missingSkills || [])
+    ),
+  ].slice(0, 4);
+
+  const discoverTips = [
+    !candidateProfile?.resume_text && 'Upload your resume to unlock deeper AI matching.',
+    !candidateProfile?.work_experience_list?.length && 'Add work experience to improve role seniority matching.',
+    !candidateProfile?.education_list?.length && 'Include your education details to strengthen academic fit scoring.',
+    candidateSkills.length < 5 && 'Add more skills to improve skill-overlap recommendations.',
+  ].filter(Boolean);
+
   const handleFindJobs = () => {
     setActiveView('jobs');
   };
@@ -220,6 +260,179 @@ function Dashboard({ onLogout }) {
     }
     alert(`${label} is available from the business workflow.`);
   };
+
+  const renderDiscoverView = () => (
+    <div className="discover-view">
+      <section className="discover-hero">
+        <div className="discover-hero-content">
+          <div>
+            <p className="discover-kicker">AI Discovery</p>
+            <h2 className="discover-title">Explore what Career Hub sees for you next</h2>
+            <p className="discover-subtitle">
+              This space combines your profile, application history, and recommendation signals to suggest roles, companies, and next moves.
+            </p>
+          </div>
+          <div className="discover-summary-card">
+            <span className="discover-summary-label">Profile Strength</span>
+            <strong className="discover-summary-value">{displayUserProfile.profileComplete}%</strong>
+            <span className="discover-summary-meta">{candidateSkills.length} tracked skills</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="discover-section">
+        <div className="discover-section-header">
+          <h3>Top Matches</h3>
+          <span>{topRecommendations.length} strongest recommendations</span>
+        </div>
+        <div className="discover-card-grid">
+          {topRecommendations.length === 0 ? (
+            <div className="discover-empty-card">
+              <Icon name="sparkles" size={28} />
+              <p>Complete your profile to generate AI-ranked job matches here.</p>
+            </div>
+          ) : (
+            topRecommendations.map((job) => (
+              <article key={job.id} className="discover-job-card">
+                <div className="discover-job-top">
+                  <div className="discover-company-mark">{job.companyLogo}</div>
+                  <span className="discover-match-score">{job.match}% Match</span>
+                </div>
+                <h4>{job.position}</h4>
+                <p className="discover-company-name">{job.company}</p>
+                <div className="discover-meta-row">
+                  <span><Icon name="location" size={14} /> {job.location}</span>
+                  <span><Icon name="money" size={14} /> {job.salary}</span>
+                </div>
+                <div className="discover-tag-row">
+                  {job.tags.slice(0, 3).map((tag) => (
+                    <span key={tag} className="discover-tag">{tag}</span>
+                  ))}
+                </div>
+              </article>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section className="discover-two-column">
+        <div className="discover-panel">
+          <div className="discover-section-header">
+            <h3>Near Matches</h3>
+            <span>Roles you can unlock with a few improvements</span>
+          </div>
+          {nearMatches.length === 0 ? (
+            <div className="discover-empty-card compact">
+              <Icon name="chart" size={24} />
+              <p>No near-match roles yet. More recommendations will appear as your profile grows.</p>
+            </div>
+          ) : (
+            nearMatches.map((job) => (
+              <div key={job.id} className="discover-list-card">
+                <div className="discover-list-header">
+                  <div>
+                    <h4>{job.position}</h4>
+                    <p>{job.company}</p>
+                  </div>
+                  <span className="discover-soft-badge">{job.match}%</span>
+                </div>
+                <p className="discover-list-note">
+                  Missing skills: {job.missingSkills?.length ? job.missingSkills.join(', ') : 'No major skill gaps detected'}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="discover-panel">
+          <div className="discover-section-header">
+            <h3>Learning Focus</h3>
+            <span>Skills to improve your next recommendation wave</span>
+          </div>
+          <div className="discover-learning-list">
+            {learningRecommendations.length === 0 ? (
+              <div className="discover-empty-card compact">
+                <Icon name="bookmark" size={24} />
+                <p>Your profile already covers the main skills in current matches.</p>
+              </div>
+            ) : (
+              learningRecommendations.map((item) => (
+                <div key={item} className="discover-learning-item">
+                  <div className="discover-learning-icon">
+                    <Icon name="check" size={14} />
+                  </div>
+                  <span>{item}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="discover-two-column">
+        <div className="discover-panel">
+          <div className="discover-section-header">
+            <h3>Career Paths</h3>
+            <span>AI-suggested role progression</span>
+          </div>
+          <div className="discover-paths">
+            {careerPaths.map((path, index) => (
+              <div key={`${path.title}-${index}`} className="discover-path-card">
+                <span className="discover-path-current">{path.title}</span>
+                <Icon name="arrow" size={16} />
+                <span className="discover-path-next">{path.next}</span>
+                <p>{path.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="discover-panel">
+          <div className="discover-section-header">
+            <h3>Companies to Explore</h3>
+            <span>Based on your top recommendation patterns</span>
+          </div>
+          <div className="discover-company-grid">
+            {targetCompanies.length === 0 ? (
+              <div className="discover-empty-card compact">
+                <Icon name="users" size={24} />
+                <p>Company suggestions will appear once enough recommendations are available.</p>
+              </div>
+            ) : (
+              targetCompanies.map((company) => (
+                <div key={company} className="discover-company-card">
+                  <div className="discover-company-badge">{getUserInitials(company)}</div>
+                  <span>{company}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="discover-section">
+        <div className="discover-section-header">
+          <h3>Profile Improvement Tips</h3>
+          <span>Generated from your current profile signals</span>
+        </div>
+        <div className="discover-tips">
+          {discoverTips.length === 0 ? (
+            <div className="discover-empty-card compact">
+              <Icon name="sparkles" size={24} />
+              <p>Your profile already covers the core recommendation inputs.</p>
+            </div>
+          ) : (
+            discoverTips.map((tip) => (
+              <div key={tip} className="discover-tip-card">
+                <Icon name="lightning" size={18} />
+                <span>{tip}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+    </div>
+  );
 
   // SVG Icons Library
   const Icon = ({ name, size = 20 }) => {
@@ -358,6 +571,8 @@ function Dashboard({ onLogout }) {
             />
           ) : activeView === 'applications' ? (
             <Applications />
+          ) : activeView === 'discover' ? (
+            renderDiscoverView()
           ) : (
             <>
 
