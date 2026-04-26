@@ -175,6 +175,7 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-md);
+  position: relative;
 }
 
 .icon-button {
@@ -280,6 +281,58 @@ body {
   color: var(--primary-600);
 }
 
+.business-menu-wrapper {
+  position: relative;
+}
+
+.business-trigger.open {
+  background: var(--primary-50);
+  color: var(--primary-700);
+}
+
+.business-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 300px;
+  background: white;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  padding: 8px;
+  z-index: 120;
+}
+
+.business-dropdown-item {
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: background 0.2s ease;
+}
+
+.business-dropdown-item:hover {
+  background: var(--primary-50);
+}
+
+.business-dropdown-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gray-900);
+}
+
+.business-dropdown-description {
+  font-size: 12px;
+  color: var(--gray-500);
+  line-height: 1.4;
+}
+
 /* ===================================
    MAIN CONTENT
    =================================== */
@@ -297,10 +350,11 @@ body {
 
 /* Hero Section */
 .hero-section {
-  background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%);
+  background: linear-gradient(135deg, #ffffff 0%, var(--gray-50) 100%);
+  border: 1px solid var(--gray-200);
   border-radius: var(--radius-xl);
   padding: var(--space-2xl);
-  color: white;
+  color: var(--gray-900);
   box-shadow: var(--shadow-lg);
   position: relative;
   overflow: hidden;
@@ -327,17 +381,18 @@ body {
   font-weight: 800;
   margin-bottom: var(--space-sm);
   letter-spacing: -1px;
+  color: var(--gray-900);
 }
 
 .hero-subtitle {
   font-size: 16px;
-  opacity: 0.9;
+  color: var(--gray-600);
   margin-bottom: var(--space-xl);
   font-weight: 400;
 }
 
 .search-bar-container {
-  max-width: 800px;
+  max-width: 1100px;
 }
 
 .search-bar {
@@ -348,12 +403,27 @@ body {
   padding: var(--space-sm);
   border-radius: var(--radius-lg);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  width: 100%;
 }
 
 .search-bar svg {
   color: var(--gray-400);
-  margin-left: var(--space-sm);
   flex-shrink: 0;
+}
+
+.search-segment {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  padding: 0 var(--space-sm);
+}
+
+.search-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--gray-200);
 }
 
 .search-input {
@@ -370,12 +440,11 @@ body {
   color: var(--gray-400);
 }
 
-.filter-button {
+.find-jobs-button {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
   padding: var(--space-md) var(--space-lg);
-  background: var(--gray-900);
+  background: var(--primary-600);
   color: white;
   border: none;
   border-radius: var(--radius-md);
@@ -387,8 +456,8 @@ body {
   white-space: nowrap;
 }
 
-.filter-button:hover {
-  background: var(--gray-800);
+.find-jobs-button:hover {
+  background: var(--primary-700);
   transform: translateY(-1px);
 }
 
@@ -443,18 +512,18 @@ body {
 }
 
 .metric-icon.green {
-  background: linear-gradient(135deg, var(--success-500) 0%, var(--success-600) 100%);
-  box-shadow: 0 4px 14px rgba(34, 197, 94, 0.4);
+  background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-700) 100%);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
 }
 
 .metric-icon.purple {
-  background: linear-gradient(135deg, var(--purple-500) 0%, var(--purple-600) 100%);
-  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.4);
+  background: linear-gradient(135deg, var(--gray-600) 0%, var(--gray-800) 100%);
+  box-shadow: 0 4px 14px rgba(75, 85, 99, 0.25);
 }
 
 .metric-icon.gold {
-  background: linear-gradient(135deg, var(--gold-500) 0%, var(--gold-600) 100%);
-  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
+  background: linear-gradient(135deg, var(--gray-500) 0%, var(--gray-700) 100%);
+  box-shadow: 0 4px 14px rgba(107, 114, 128, 0.25);
 }
 
 .metric-badge {
@@ -468,8 +537,8 @@ body {
 }
 
 .metric-badge.positive {
-  background: var(--success-50);
-  color: var(--success-600);
+  background: var(--primary-50);
+  color: var(--primary-600);
 }
 
 .metric-badge.negative {
@@ -729,7 +798,7 @@ body {
 }
 
 .application-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--gray-900);
   line-height: 1.3;
@@ -771,7 +840,7 @@ body {
 }
 
 .company-name {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--gray-600);
   font-weight: 500;
 }
@@ -790,7 +859,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--gray-600);
 }
 
@@ -810,7 +879,7 @@ body {
   background: white;
   border: 1px solid var(--gray-300);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--gray-700);
 }
@@ -840,7 +909,7 @@ body {
 }
 
 .match-score {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--gray-900);
 }
@@ -857,9 +926,27 @@ body {
 }
 
 .next-action {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--primary-600);
   font-weight: 600;
+}
+
+.primary-button {
+  padding: 12px 18px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--primary-600);
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.primary-button:hover {
+  background: var(--primary-700);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .action-button-small {
@@ -1130,14 +1217,14 @@ body {
 
 /* Profile Card */
 .profile-card {
-  background: linear-gradient(135deg, var(--purple-50) 0%, white 100%);
-  border: 2px solid var(--purple-200);
+  background: linear-gradient(135deg, var(--primary-50) 0%, white 100%);
+  border: 2px solid var(--primary-200);
 }
 
 .profile-percentage {
   font-size: 18px;
   font-weight: 800;
-  color: var(--purple-600);
+  color: var(--primary-600);
 }
 
 .progress-container {
@@ -1155,10 +1242,10 @@ body {
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--purple-500) 0%, var(--purple-600) 100%);
+  background: linear-gradient(90deg, var(--primary-500) 0%, var(--primary-700) 100%);
   border-radius: var(--radius-full);
   transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.4);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
 }
 
 .profile-tasks {
@@ -1184,14 +1271,14 @@ body {
 .task-check {
   width: 24px;
   height: 24px;
-  background: linear-gradient(135deg, var(--success-500) 0%, var(--success-600) 100%);
+  background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-700) 100%);
   color: white;
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
 }
 
 .task-check.empty {
@@ -1202,10 +1289,10 @@ body {
 .complete-profile-button {
   width: 100%;
   padding: var(--space-md);
-  background: linear-gradient(135deg, var(--purple-500) 0%, var(--purple-600) 100%);
+  background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-700) 100%);
   color: white;
   border: none;
-  border-top: 1px solid var(--purple-300);
+  border-top: 1px solid var(--primary-300);
   font-size: 14px;
   font-weight: 600;
   font-family: var(--font-primary);
@@ -1218,7 +1305,7 @@ body {
 }
 
 .complete-profile-button:hover {
-  background: linear-gradient(135deg, var(--purple-600) 0%, var(--purple-700) 100%);
+  background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-800) 100%);
   transform: translateY(-1px);
 }
 
@@ -1226,6 +1313,11 @@ body {
 .quick-actions-card {
   background: linear-gradient(135deg, var(--primary-50) 0%, white 100%);
   border: 2px solid var(--primary-200);
+}
+
+.quick-actions-title {
+  text-align: center;
+  padding: 5px 0;
 }
 
 .quick-actions {
@@ -1320,7 +1412,12 @@ body {
     align-items: stretch;
   }
 
-  .filter-button {
+  .search-divider {
+    width: 100%;
+    height: 1px;
+  }
+
+  .find-jobs-button {
     justify-content: center;
   }
 
