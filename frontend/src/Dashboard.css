@@ -64,6 +64,13 @@
   /* Typography */
   --font-primary: Aptos, Arial, Helvetica, sans-serif;
   --font-accent: Aptos, Arial, Helvetica, sans-serif;
+
+  /*Font Size*/
+  --font-size-body: 16px;
+  --font-weight-regular: 400;
+  --font-size-heading: 30px;
+  --font-size-subheading: 23px;
+
 }
 
 * {
