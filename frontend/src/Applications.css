@@ -4,6 +4,8 @@
   flex-direction: column;
   gap: var(--space-2xl);
   animation: fadeIn 0.4s ease-in-out;
+  font-size: 17px;
+  font-weight: 400;
 }
 
 .view-header {
@@ -15,15 +17,16 @@
 }
 
 .view-title {
-  font-size: 32px;
-  font-weight: 700;
+  font-size: 35px;
+  font-weight: 400;
   color: var(--gray-900);
   margin: 0 0 var(--space-xs) 0;
   line-height: 1.2;
 }
 
 .view-subtitle {
-  font-size: 16px;
+  font-size: 23px;
+  font-weight: 400;
   color: var(--gray-500);
   margin: 0;
   line-height: 1.5;
@@ -87,7 +90,8 @@
 
 .applications-state-title {
   margin: 0 0 8px;
-  font-size: 24px;
+  font-size: 23px;
+  font-weight: 400;
   color: var(--gray-900);
 }
 
@@ -115,8 +119,8 @@
 }
 
 .section-title {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 23px;
+  font-weight: 400;
   color: var(--gray-800);
   margin: 0;
 }
@@ -165,6 +169,6 @@
   }
 
   .view-title {
-    font-size: 24px;
+    font-size: 35px;
   }
 }

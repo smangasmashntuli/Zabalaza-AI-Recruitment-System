@@ -36,6 +36,8 @@
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   animation: slideUp 0.3s ease-out;
   overflow: hidden;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-regular);
 }
 
 @keyframes slideUp {
@@ -69,18 +71,18 @@
 }
 
 .profile-main-title {
-  font-size: 28px;
-  font-weight: 800;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-regular);
   margin: 0 0 8px 0;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-family-primary);
   letter-spacing: -0.5px;
 }
 
 .profile-subtitle {
-  font-size: 15px;
+  font-size: var(--font-size-subheading);
   opacity: 0.9;
   margin: 0;
-  font-weight: 400;
+  font-weight: var(--font-weight-regular);
 }
 
 .profile-header-actions {
@@ -98,7 +100,7 @@
   border-radius: 12px;
   font-size: 14px;
   font-weight: 600;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-family-primary);
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -166,7 +168,7 @@
   color: rgba(255, 255, 255, 0.7);
   font-size: 14px;
   font-weight: 600;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-family-primary);
   border-bottom: 3px solid transparent;
   cursor: pointer;
   transition: all 0.2s;
@@ -300,18 +302,18 @@
 }
 
 .profile-name {
-  font-size: 32px;
-  font-weight: 800;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-regular);
   color: #0f172a;
   margin: 0 0 8px 0;
   letter-spacing: -0.5px;
 }
 
 .profile-title {
-  font-size: 18px;
+  font-size: var(--font-size-subheading);
   color: #0369a1;
   margin: 0 0 16px 0;
-  font-weight: 600;
+  font-weight: var(--font-weight-regular);
 }
 
 .profile-bio {
@@ -339,8 +341,8 @@
 }
 
 .profile-card-title {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: var(--font-size-subheading);
+  font-weight: var(--font-weight-regular);
   color: #0f172a;
   margin: 0;
 }
@@ -356,7 +358,7 @@
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-family-primary);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -702,7 +704,7 @@
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-family-primary);
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.2s;
@@ -825,7 +827,7 @@
   border-radius: 10px;
   font-size: 14px;
   font-weight: 600;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-family-primary);
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
@@ -891,7 +893,7 @@
   border: 2px solid #e2e8f0;
   border-radius: 10px;
   font-size: 14px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-family-primary);
   color: #0f172a;
   transition: all 0.2s;
   background: white;
@@ -908,7 +910,7 @@
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   font-size: 13px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-family-primary);
   color: #0f172a;
   transition: all 0.2s;
   background: white;
@@ -926,7 +928,7 @@
   border: 2px solid #e2e8f0;
   border-radius: 10px;
   font-size: 14px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-family-primary);
   color: #0f172a;
   transition: all 0.2s;
   background: white;
