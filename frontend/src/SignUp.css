@@ -5,6 +5,8 @@
   justify-content: center;
   padding: 24px;
   background: var(--color-surface-muted);
+  font-size: var(--font-size-body, 17px);
+  font-weight: var(--font-weight-regular, 400);
 }
 
 .signup-card {
@@ -24,12 +26,15 @@
 
 .signup-header h2 {
   margin: 0 0 8px;
-  font-size: 2rem;
+  font-size: var(--font-size-heading, 35px);
+  font-weight: var(--font-weight-regular, 400);
   color: var(--color-text);
 }
 
 .signup-header p {
   margin: 0;
+  font-size: var(--font-size-subheading, 23px);
+  font-weight: var(--font-weight-regular, 400);
   color: var(--color-text-muted);
 }
 

@@ -5,6 +5,8 @@
   justify-content: center;
   padding: 24px;
   background: var(--color-surface-muted);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-regular);
 }
 
 .login-card {
@@ -24,12 +26,15 @@
 
 .login-header h2 {
   margin: 0 0 8px;
-  font-size: 2rem;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-regular);
   color: var(--color-text);
 }
 
 .login-header p {
   margin: 0;
+  font-size: var(--font-size-subheading);
+  font-weight: var(--font-weight-regular);
   color: var(--color-text-muted);
 }
 
