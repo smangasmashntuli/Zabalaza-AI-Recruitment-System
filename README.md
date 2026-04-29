@@ -1,243 +1,253 @@
 # AI-Powered Job Recruitment System
 
-An intelligent job recruitment platform that uses AI/ML to match candidates with job openings through semantic similarity and resume parsing.
+An AI-assisted recruitment platform with a FastAPI backend and React frontend that:
+
+- parses uploaded CVs/resumes,
+- extracts candidate skills and experience,
+- builds embeddings and profile summaries,
+- recommends matching jobs from the local database and external job sources,
+- and keeps the UI readable and user-friendly.
+
+## Current Highlights
+
+- **Resume upload and parsing** for PDF, DOC, and DOCX files
+- **Candidate profile enrichment** from uploaded CVs
+- **Hybrid job search** combining internal jobs with external sources
+- **USAJobs integration** enabled through environment configuration
+- **Readable UI typography** tuned for clarity and accessibility
+
+## Architecture
+
+### Backend
+- **FastAPI** for the API layer
+- **SQLAlchemy** for database access
+- **Pydantic** for request/response validation
+- **JWT** for authentication
+- **Sentence Transformers** for semantic embeddings
+- **python-docx / PDF parsing** for resume extraction
+
+### Frontend
+- **React** for the user interface
+- Candidate dashboard, job portal, applications view, and profile management
+
+### External Job Sources
+- Internal database jobs
+- Adzuna
+- USAJobs
 
 ## Features
 
-### 🤖 AI/ML Components
+### Candidate Experience
+1. Create an account and sign in
+2. Upload a resume/CV from the Candidate Profile page
+3. Extract text, skills, education, and work history
+4. Generate an embedding and profile summary
+5. Refresh job recommendations automatically
 
-1. **AI Resume Parser**
-   - Extracts structured information from PDF and DOCX resumes
-   - Identifies skills, experience, education, and contact information
-   - Uses NLP techniques for intelligent text extraction
-
-2. **Semantic Job Matching**
-   - Uses Sentence Transformers (all-MiniLM-L6-v2) for semantic embeddings
-   - Calculates cosine similarity between job descriptions and candidate profiles
-   - Provides match scores and explanations for each candidate-job pair
-
-3. **Automated Profile Analysis**
-   - Generates AI-powered candidate profile summaries
-   - Extracts key skills and experience levels
-   - Creates vector embeddings for efficient matching
-
-4. **Smart Recommendations**
-   - Top-K job recommendations for candidates
-   - Best candidate matches for each job posting
-   - Personalized match explanations
+### Job Search and Matching
+- Semantic ranking of jobs against the candidate profile
+- Unified results from internal and external sources
+- Internal jobs are prioritized when available
+- Graceful fallback if an external source is unavailable
 
 ## Technology Stack
 
 ### Backend
-- **FastAPI** - Modern Python web framework
-- **SQLAlchemy** - ORM for database management
-- **MySQL** - Relational database
-- **Pydantic** - Data validation
+- FastAPI
+- SQLAlchemy
+- Pydantic
+- MySQL / MariaDB
+- Sentence Transformers
+- scikit-learn
+- python-docx
 
-### AI/ML Libraries
-- **Sentence Transformers** - Semantic text embeddings
-- **scikit-learn** - Machine learning utilities
-- **PyPDF2 & python-docx** - Document parsing
-- **NLTK** - Natural language processing
-- **PyTorch** - Deep learning framework
+### Frontend
+- React
+- React Scripts
+- CSS-based component styling
 
-### Authentication & Security
-- **JWT** - Token-based authentication
-- **Passlib & Bcrypt** - Password hashing
+### Supporting Libraries
+- PyPDF2 / PDF parsing utilities
+- Bcrypt / Passlib for password hashing
+- Requests for HTTP integration tests
 
-## Installation
+## Prerequisites
 
-### Prerequisites
 - Python 3.10+
-- MySQL 5.7+ or MariaDB
-- pip
+- Node.js 18+
+- MySQL or MariaDB
+- `pip`
+- `npm`
 
-### Setup
+## Setup
 
-1. **Clone the repository**
-```bash
-git clone <repository-url>
-cd MYPROJECT
-```
+### 1) Backend environment
 
-2. **Create virtual environment**
-```bash
+Create and activate a virtual environment:
+
+```powershell
 python -m venv .venv
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # Linux/Mac
+.venv\Scripts\Activate.ps1
 ```
 
-3. **Install dependencies**
-```bash
+Install Python dependencies:
+
+```powershell
 pip install -r requirements.txt
 ```
 
-4. **Configure environment variables**
-```bash
-cp .env.example .env
+### 2) Configure `.env`
+
+Update `C:\Users\Simangaliso\Documents\ClonedProjects\Patice\MYPROJECT\.env` with your local values.
+
+Required keys:
+
+- `DB_HOST`
+- `DB_PORT`
+- `DB_USER`
+- `DB_PASSWORD`
+- `DB_NAME`
+- `SECRET_KEY`
+- `ALGORITHM`
+- `ACCESS_TOKEN_EXPIRE_MINUTES`
+- `UPLOAD_DIR`
+- `MAX_FILE_SIZE`
+- `EMBEDDING_MODEL`
+- `SIMILARITY_THRESHOLD`
+- `ADZUNA_APP_ID`
+- `ADZUNA_APP_KEY`
+- `USAJOBS_API_KEY`
+- `USAJOBS_USER_EMAIL`
+- `ENABLED_JOB_SOURCES`
+
+Recommended values for hybrid search:
+
+```dotenv
+ENABLED_JOB_SOURCES=github,adzuna,usajobs
 ```
 
-Edit `.env` and update:
-- Database credentials (DB_HOST, DB_USER, DB_PASSWORD, DB_NAME)
-- JWT secret key (generate a secure random key)
-- Other configuration as needed
+### 3) Database
 
-5. **Create database**
-```sql
-CREATE DATABASE job_recruitment_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
+Make sure your MySQL/MariaDB database exists and matches `DB_NAME`.
 
-6. **Run the application**
-```bash
+### 4) Run the backend
+
+You can start the API with:
+
+```powershell
 python run.py
 ```
 
-The API will be available at `http://localhost:8000`
+If you want to run the FastAPI app directly:
 
-## API Documentation
+```powershell
+python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+```
 
-Once the server is running, visit:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+The API will be available at:
+
+- `http://localhost:8000`
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+
+### 5) Run the frontend
+
+In a separate terminal:
+
+```powershell
+cd frontend
+npm install
+npm start
+```
+
+The React app typically runs at `http://localhost:3000`.
+
+## Verification
+
+Quick checks after setup:
+
+```powershell
+python test_hybrid_search.py
+python test_resume_upload.py
+python debug_upload.py
+```
+
+Useful manual checks:
+
+```powershell
+python -c "import requests; print(requests.get('http://localhost:8000/openapi.json').status_code)"
+python -c "import requests, json; r=requests.get('http://localhost:8000/api/v1/jobs/search/hybrid?query=python&include_external=true'); print(r.status_code); print(len(r.json().get('items', [])))"
+```
 
 ## API Endpoints
 
 ### Authentication
-- `POST /api/v1/auth/register` - Register new user
-- `POST /api/v1/auth/login` - Login and get JWT token
+- `POST /api/v1/auth/register` — Register a new user
+- `POST /api/v1/auth/login` — Login and get JWT tokens
 
-### Jobs (Recruiter/Admin)
-- `POST /api/v1/jobs` - Create job posting
-- `GET /api/v1/jobs` - List all jobs
-- `GET /api/v1/jobs/{id}` - Get job details
-- `PUT /api/v1/jobs/{id}` - Update job
-- `DELETE /api/v1/jobs/{id}` - Delete job
-- `GET /api/v1/jobs/my/jobs` - Get my job postings
-
-### Candidates
-- `GET /api/v1/candidates/me` - Get my profile
-- `PUT /api/v1/candidates/me` - Update my profile
-- `GET /api/v1/candidates/me/matches` - Get AI job matches
-- `POST /api/v1/candidates/me/applications` - Apply for job
-- `GET /api/v1/candidates/me/applications` - My applications
+### Candidate Profile
+- `GET /api/v1/candidates/me` — Get current candidate profile
+- `PUT /api/v1/candidates/me` — Update current candidate profile
+- `GET /api/v1/candidates/me/matches` — Get AI job matches
 
 ### Resume Upload
-- `POST /api/v1/uploads/resume` - Upload and parse resume with AI
+- `POST /api/v1/uploads/resume` — Upload and parse a resume/CV
 
-### AI Matching (Recruiter/Admin)
-- `GET /api/v1/matches/job/{job_id}/candidates` - Get matching candidates for job
-- `GET /api/v1/matches/applications/job/{job_id}` - Get job applications with scores
-- `PUT /api/v1/matches/applications/{id}/status` - Update application status
+### Jobs
+- `GET /api/v1/jobs` — List local jobs
+- `GET /api/v1/jobs/search/hybrid` — Hybrid search across internal jobs and external sources
 
-## User Roles
+### Applications
+- `POST /api/v1/candidates/me/applications` — Apply for a job
+- `GET /api/v1/candidates/me/applications` — List my applications
 
-1. **Candidate**
-   - Create profile
-   - Upload resume
-   - Get AI-powered job recommendations
-   - Apply for jobs
-   - Track applications
+## Resume Processing Flow
 
-2. **Recruiter**
-   - Post jobs
-   - View AI-matched candidates
-   - Review applications with match scores
-   - Update application status
+1. User uploads a resume from the Candidate Profile page
+2. Backend validates file type and size
+3. Resume text is extracted
+4. Skills, education, and experience are parsed
+5. Candidate embedding is generated
+6. AI profile summary is generated
+7. Job recommendations are refreshed
 
-3. **Admin**
-   - All recruiter permissions
-   - Manage all jobs and applications
-   - System administration
+## Hybrid Job Search Flow
 
-## AI/ML Workflow
-
-### Resume Processing
-1. User uploads resume (PDF/DOCX)
-2. AI parser extracts text and structured data
-3. Skills, experience, and education identified
-4. Semantic embedding generated using Sentence Transformers
-5. Profile summary auto-generated
-
-### Job Matching
-1. Job posting created with description and requirements
-2. Semantic embedding generated for job
-3. When candidate applies or searches:
-   - Cosine similarity calculated between embeddings
-   - Skill overlap analyzed
-   - Experience level matched
-   - Combined score computed (0-1 range)
-4. Match explanation generated
-5. Results ranked by match score
+1. Search internal jobs in the database
+2. Fetch external jobs from enabled providers
+3. Normalize all results into one schema
+4. Rank and combine results into a unified list
+5. Return a single response to the frontend
 
 ## Project Structure
 
-```
+```text
 MYPROJECT/
 ├── backend/
 │   └── app/
-│       ├── api/           # API routes
-│       │   ├── auth.py
-│       │   ├── jobs.py
-│       │   ├── candidates.py
-│       │   ├── uploads.py
-│       │   └── matches.py
-│       ├── core/          # Core utilities
-│       │   ├── security.py
-│       │   └── dependencies.py
-│       ├── services/      # AI/ML services
-│       │   ├── resume_parser.py
-│       │   ├── matching_engine.py
-│       │   └── ai_service.py
-│       ├── schemas/       # Pydantic schemas
-│       ├── models.py      # Database models
-│       ├── database.py    # Database setup
-│       ├── config.py      # Configuration
-│       └── main.py        # FastAPI app
-├── uploads/               # Uploaded resumes
-├── .env                   # Environment variables
-├── requirements.txt       # Python dependencies
-└── run.py                # Application runner
+│       ├── api/
+│       ├── core/
+│       ├── schemas/
+│       ├── services/
+│       ├── models.py
+│       ├── database.py
+│       ├── config.py
+│       └── main.py
+├── frontend/
+│   ├── src/
+│   └── package.json
+├── uploads/
+├── .env
+├── requirements.txt
+├── run.py
+└── test_*.py
 ```
 
-## Development
+## Notes
 
-### Running Tests
-```bash
-pytest
-```
-
-### Code Quality
-```bash
-# Format code
-black backend/
-
-# Lint
-flake8 backend/
-```
-
-## Production Deployment
-
-1. Update `.env` with production settings
-2. Use a production-grade WSGI server (e.g., Gunicorn)
-3. Set up reverse proxy (Nginx)
-4. Enable HTTPS
-5. Configure proper CORS origins
-6. Set up database backups
-7. Implement rate limiting
-8. Add monitoring and logging
-
-## Future Enhancements
-
-- [ ] Interview scheduling
-- [ ] Video interview integration
-- [ ] Advanced analytics dashboard
-- [ ] Email notifications
-- [ ] Chat functionality
-- [ ] Multi-language support
-- [ ] Mobile app
-- [ ] Integration with LinkedIn/Indeed
-- [ ] Advanced ML models (BERT, GPT)
-- [ ] Skill gap analysis
+- Keep secrets out of source control.
+- External job sources are optional and controlled through `.env`.
+- If an external API fails, the system still returns internal results.
 
 ## License
 
@@ -245,5 +255,5 @@ MIT License
 
 ## Support
 
-For issues and questions, please open an issue on GitHub.
+For issues and questions, open an issue in the repository.
 
