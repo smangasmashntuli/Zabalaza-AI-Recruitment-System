@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 import json
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.request import urlopen, Request
 
 from sqlalchemy.orm import Session
 
@@ -68,6 +68,7 @@ class HybridJobService:
         source_status: Dict[str, Any] = {
             "internal": {"enabled": True, "count": len(internal_ranked)},
             "adzuna": {"enabled": self._is_adzuna_enabled(include_external), "count": 0, "error": None},
+            "usajobs": {"enabled": self._is_usajobs_enabled(include_external), "count": 0, "error": None},
         }
 
         if include_external and self._is_adzuna_enabled(include_external):
@@ -87,6 +88,25 @@ class HybridJobService:
                 source_status["adzuna"]["count"] = len(external_ranked)
             except Exception as exc:  # pragma: no cover - defensive fallback
                 source_status["adzuna"]["error"] = str(exc)
+
+        # USAJobs integration
+        if include_external and self._is_usajobs_enabled(include_external):
+            try:
+                usajobs_jobs = self._fetch_usajobs_jobs(
+                    query=query,
+                    location=location,
+                    job_type=job_type,
+                    salary_min=salary_min,
+                    salary_max=salary_max,
+                    page=page,
+                    limit=min(limit, settings.EXTERNAL_JOB_LIMIT),
+                )
+                for job in usajobs_jobs:
+                    score = self._score_external_job(job, query=query, location=location, job_type=job_type)
+                    external_ranked.append(_RankedJob(job=job, score=score, source="usajobs"))
+                source_status["usajobs"]["count"] = len([j for j in external_ranked if j.source == 'usajobs'])
+            except Exception as exc:  # pragma: no cover - defensive fallback
+                source_status["usajobs"]["error"] = str(exc)
 
         combined = [*internal_ranked, *external_ranked]
         combined.sort(key=lambda item: item.score, reverse=True)
@@ -188,6 +208,14 @@ class HybridJobService:
         enabled_sources = {item.strip().lower() for item in settings.ENABLED_JOB_SOURCES.split(",") if item.strip()}
         return "adzuna" in enabled_sources or not enabled_sources
 
+    def _is_usajobs_enabled(self, include_external: bool) -> bool:
+        if not include_external:
+            return False
+        if not settings.USAJOBS_API_KEY:
+            return False
+        enabled_sources = {item.strip().lower() for item in settings.ENABLED_JOB_SOURCES.split(",") if item.strip()}
+        return "usajobs" in enabled_sources or not enabled_sources
+
     def _fetch_adzuna_jobs(
         self,
         query: Optional[str],
@@ -230,6 +258,130 @@ class HybridJobService:
 
         results = payload.get("results", []) if isinstance(payload, dict) else []
         return [self._normalize_adzuna_job(item) for item in results]
+
+    def _fetch_usajobs_jobs(
+        self,
+        query: Optional[str],
+        location: Optional[str],
+        job_type: Optional[str],
+        salary_min: Optional[float],
+        salary_max: Optional[float],
+        page: int,
+        limit: int,
+    ) -> List[Dict[str, Any]]:
+        """Fetch jobs from USAJobs API and normalize results.
+
+        This implementation is defensive: USAJobs responses vary, so we
+        extract common fields when present.
+        """
+        base_url = "https://data.usajobs.gov/api/search"
+        params: Dict[str, Any] = {
+            "ResultsPerPage": max(1, min(limit, settings.EXTERNAL_JOB_LIMIT)),
+            "Page": max(1, page),
+        }
+
+        if query:
+            params["Keyword"] = query
+        if location:
+            params["LocationName"] = location
+
+        url = f"{base_url}?{urlencode(params)}"
+
+        headers = {
+            # USAJobs requires a contact User-Agent (email) and API key header
+            "User-Agent": settings.USAJOBS_USER_EMAIL or "no-reply@example.com",
+            "Authorization-Key": settings.USAJOBS_API_KEY,
+        }
+
+        req = Request(url, headers=headers)
+        with urlopen(req, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+
+        items = []
+        # The USAJobs API wraps results in SearchResult > SearchResultItems
+        search_result = payload.get("SearchResult") if isinstance(payload, dict) else None
+        results = []
+        if isinstance(search_result, dict):
+            results = search_result.get("SearchResultItems", []) or []
+
+        for item in results:
+            try:
+                norm = self._normalize_usajobs_job(item)
+                items.append(norm)
+            except Exception:
+                # Skip malformed entries
+                continue
+
+        return items
+
+    def _normalize_usajobs_job(self, raw: Dict[str, Any]) -> Dict[str, Any]:
+        # raw is expected to be an object with 'MatchedObjectDescriptor' inside
+        descriptor = raw.get("MatchedObjectDescriptor") if isinstance(raw, dict) else {}
+
+        usajobs_id = descriptor.get("PositionID") or descriptor.get("MatchedObjectId") or descriptor.get("PositionURI") or "unknown"
+
+        # Title/company
+        title = descriptor.get("PositionTitle") or "Untitled role"
+        company = descriptor.get("OrganizationName") or "US Government"
+
+        # Description: try common locations in the payload
+        description = descriptor.get("UserArea", {}).get("Details", {}).get("JobSummary") or descriptor.get("PositionURI") or "No description provided."
+
+        # Locations
+        locations = descriptor.get("PositionLocation", []) or []
+        if isinstance(locations, list) and len(locations) > 0:
+            location_name = locations[0].get("LocationName") or locations[0].get("Location", "")
+        else:
+            location_name = "Remote"
+
+        # Salary (USAJobs may provide PositionRemuneration list)
+        salary_min = None
+        salary_max = None
+        remuneration = descriptor.get("PositionRemuneration") or []
+        if isinstance(remuneration, list) and remuneration:
+            try:
+                rem = remuneration[0]
+                min_range = rem.get("MinimumRange")
+                max_range = rem.get("MaximumRange")
+                if min_range is not None:
+                    salary_min = float(min_range)
+                if max_range is not None:
+                    salary_max = float(max_range)
+            except Exception:
+                salary_min = None
+                salary_max = None
+
+        # Apply url
+        apply_url = None
+        apply_uris = descriptor.get("ApplyURI") or []
+        if isinstance(apply_uris, list) and apply_uris:
+            apply_url = apply_uris[0]
+        else:
+            apply_url = descriptor.get("PositionURI")
+
+        published_iso = self._normalize_timestamp(descriptor.get("PublicationStartDate") or descriptor.get("PositionStartDate"))
+
+        return {
+            "id": f"usajobs_{usajobs_id}",
+            "job_id": None,
+            "source": "usajobs",
+            "title": title,
+            "company": company,
+            "description": description,
+            "requirements": description,
+            "location": location_name,
+            "salary_min": salary_min,
+            "salary_max": salary_max,
+            "job_type": None,
+            "experience_level": None,
+            "status": "active",
+            "recruiter_id": None,
+            "created_at": published_iso,
+            "updated_at": published_iso,
+            "apply_url": apply_url,
+            "external": True,
+            "can_apply_internal": False,
+        }
 
     def _normalize_adzuna_job(self, raw: Dict[str, Any]) -> Dict[str, Any]:
         adzuna_id = str(raw.get("id") or raw.get("adref") or raw.get("redirect_url") or "unknown")
