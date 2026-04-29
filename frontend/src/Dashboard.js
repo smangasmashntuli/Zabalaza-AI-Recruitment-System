@@ -29,13 +29,15 @@ function Dashboard({ onLogout }) {
 
   // Fetch all data on component mount
   useEffect(() => {
-    fetchDashboardData().then(r => {});
+    fetchDashboardData().then(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       setError(null);
 
       // Fetch user data
@@ -99,7 +101,9 @@ function Dashboard({ onLogout }) {
       }
       setError(err.message || 'Failed to load dashboard data');
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -467,7 +471,12 @@ function Dashboard({ onLogout }) {
   return (
     <div className="dashboard">
       {/* Candidate Profile Modal */}
-      {showProfile && <CandidateProfile onClose={() => setShowProfile(false)} />}
+      {showProfile && (
+        <CandidateProfile
+          onClose={() => setShowProfile(false)}
+          onProfileUpdated={() => fetchDashboardData({ silent: true })}
+        />
+      )}
 
       {/* Modern Header with Navigation */}
       <header className="dashboard-header">
