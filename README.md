@@ -249,10 +249,6 @@ MYPROJECT/
 - External job sources are optional and controlled through `.env`.
 - If an external API fails, the system still returns internal results.
 
-## License
-
-MIT License
-
 ## Support
 
 For issues and questions, open an issue in the repository.
