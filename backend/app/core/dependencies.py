@@ -1,4 +1,5 @@
-from typing import Generator, Optional
+from typing import Generator
+import os
 from fastapi import Depends, HTTPException, status, UploadFile
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -8,8 +9,12 @@ from .security import verify_token
 
 security = HTTPBearer()
 
-ALLOWED_FILE_TYPES = ["application/pdf", "application/msword", 
-                       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
+ALLOWED_FILE_TYPES = [
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]
+ALLOWED_FILE_EXTENSIONS = {".pdf", ".doc", ".docx"}
 
 
 def get_db() -> Generator:
@@ -36,23 +41,23 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    username: str = payload.get("sub")
-    if username is None:
+    username = payload.get("sub")
+    if not isinstance(username, str):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    user = db.query(User).filter(User.username == username).first()
-    if user is None:
+    db_user = db.query(User).filter(User.username == username).first()
+    if db_user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    return user
+    return db_user
 
 
 def get_current_active_user(
@@ -93,7 +98,8 @@ def get_current_recruiter_user(
 
 def validate_file_type(file: UploadFile) -> UploadFile:
     """Validate uploaded file type."""
-    if file.content_type not in ALLOWED_FILE_TYPES:
+    file_extension = os.path.splitext(file.filename or "")[1].lower()
+    if file.content_type not in ALLOWED_FILE_TYPES and file_extension not in ALLOWED_FILE_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"File type not allowed. Allowed types: PDF, DOC, DOCX"

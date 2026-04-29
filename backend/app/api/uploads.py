@@ -12,6 +12,18 @@ from ..config import settings
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
 
+def _get_effective_content_type(file: UploadFile) -> str:
+    """Return a stable resume content type from MIME type or filename extension."""
+    filename = (file.filename or "").lower()
+    if filename.endswith(".pdf"):
+        return "application/pdf"
+    if filename.endswith(".doc"):
+        return "application/msword"
+    if filename.endswith(".docx"):
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    return file.content_type or "application/octet-stream"
+
+
 @router.post("/resume", response_model=CandidateSchema)
 async def upload_resume(
     file: UploadFile = File(...),
@@ -21,6 +33,7 @@ async def upload_resume(
     """Upload and parse resume using AI."""
     # Validate file type
     validate_file_type(file)
+    effective_content_type = _get_effective_content_type(file)
 
     # Get candidate profile
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
@@ -42,7 +55,7 @@ async def upload_resume(
         )
 
     # Parse resume using AI
-    parsed_data = ai_service.parse_resume(file_content, file.content_type)
+    parsed_data = ai_service.parse_resume(file_content, effective_content_type)
 
     if not parsed_data.get('success'):
         raise HTTPException(
@@ -56,7 +69,7 @@ async def upload_resume(
 
     # Create unique filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_extension = os.path.splitext(file.filename)[1]
+    file_extension = os.path.splitext(file.filename or "")[1]
     filename = f"resume_{current_user.id}_{timestamp}{file_extension}"
     file_path = os.path.join(upload_dir, filename)
 
@@ -111,5 +124,51 @@ async def upload_resume(
     db.commit()
     db.refresh(candidate)
 
-    return candidate
+    # Return a response payload compatible with CandidateSchema
+    response_data = {
+        "id": candidate.id,
+        "user_id": candidate.user_id,
+        "email": current_user.email,
+        "first_name": current_user.first_name or "",
+        "last_name": current_user.last_name or "",
+        "phone": candidate.phone,
+        "location": candidate.location,
+        "title": candidate.title,
+        "bio": candidate.bio,
+        "website": candidate.website,
+        "linkedin": candidate.linkedin,
+        "github": candidate.github,
+        "experience_years": candidate.experience_years,
+        "resume_path": candidate.resume_path,
+        "resume_text": candidate.resume_text,
+        "profile_summary": candidate.profile_summary,
+        "created_at": candidate.created_at,
+        "updated_at": candidate.updated_at,
+    }
+
+    try:
+        response_data["skills_list"] = json.loads(candidate.skills) if candidate.skills else []
+    except Exception:
+        response_data["skills_list"] = []
+
+    try:
+        response_data["education_list"] = json.loads(candidate.education) if candidate.education else []
+    except Exception:
+        response_data["education_list"] = []
+
+    try:
+        response_data["work_experience_list"] = json.loads(candidate.work_experience) if candidate.work_experience else []
+    except Exception:
+        response_data["work_experience_list"] = []
+
+    try:
+        response_data["certifications"] = json.loads(candidate.certifications) if candidate.certifications else []
+    except Exception:
+        response_data["certifications"] = []
+
+    response_data["skills"] = candidate.skills
+    response_data["education"] = candidate.education
+    response_data["work_experience"] = candidate.work_experience
+
+    return response_data
 
