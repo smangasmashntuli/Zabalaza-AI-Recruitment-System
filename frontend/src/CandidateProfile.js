@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './CandidateProfile.css';
 import { getCandidateProfile, updateCandidateProfile, uploadResume } from './api/candidates';
 
-function CandidateProfile({ onClose }) {
+function CandidateProfile({ onClose, onProfileUpdated }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -10,6 +10,8 @@ function CandidateProfile({ onClose }) {
   const [isEditing, setIsEditing] = useState(false);
   const [newSkill, setNewSkill] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
+  const [resumeMessage, setResumeMessage] = useState('');
+  const [resumeUploading, setResumeUploading] = useState(false);
 
   // Load profile data on component mount
   useEffect(() => {
@@ -107,6 +109,7 @@ function CandidateProfile({ onClose }) {
 
       // Reload profile to get updated data
       await loadProfile();
+      await onProfileUpdated?.();
     } catch (err) {
       console.error('Error saving profile:', err);
       setError('Failed to save profile. Please try again.');
@@ -121,17 +124,29 @@ function CandidateProfile({ onClose }) {
 
     try {
       setSaving(true);
+      setResumeUploading(true);
       setError(null);
+      setResumeMessage(`Uploading ${file.name} and extracting your CV text...`);
       await uploadResume(file);
 
       // Reload profile to get updated resume path
       await loadProfile();
+      await onProfileUpdated?.();
+      setResumeMessage('CV uploaded successfully. Your profile and job recommendations were refreshed.');
     } catch (err) {
       console.error('Error uploading resume:', err);
+      setResumeMessage('');
       setError('Failed to upload resume. Please try again.');
     } finally {
       setSaving(false);
+      setResumeUploading(false);
+      event.target.value = '';
     }
+  };
+
+  const getResumeFileName = () => {
+    if (!profile?.resumePath) return '';
+    return profile.resumePath.split(/[\\/]/).pop();
   };
 
   const formatDate = (dateString) => {
@@ -307,6 +322,48 @@ function CandidateProfile({ onClose }) {
                       </>
                     )}
                   </div>
+                </div>
+              </div>
+
+              {/* CV Upload Card */}
+              <div className="profile-card">
+                <div className="profile-card-header">
+                  <div className="card-header-left">
+                    <Icon name="upload" size={22} />
+                    <h3 className="profile-card-title">Upload CV</h3>
+                  </div>
+                  <span className="skill-count">{profile.resumePath ? 'CV connected' : 'Upload required'}</span>
+                </div>
+                <div className="profile-card-body">
+                  <div className="resume-upload-zone">
+                    <div className="upload-icon-container">
+                      <Icon name="upload" size={48} />
+                    </div>
+                    <h4 className="upload-title">Upload your CV</h4>
+                    <p className="upload-subtitle">
+                      We will extract the text from your CV, update your profile, and refresh your job matches in real time.
+                    </p>
+                    <label className={`upload-button ${resumeUploading ? 'disabled' : ''}`}>
+                      <Icon name={resumeUploading ? 'briefcase' : 'upload'} size={18} />
+                      {resumeUploading ? 'Uploading...' : 'Choose CV'}
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx"
+                        onChange={handleFileUpload}
+                        disabled={resumeUploading || saving}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+                    {resumeMessage && <p className="resume-upload-status">{resumeMessage}</p>}
+                  </div>
+
+                  {profile.resumePath && (
+                    <div className="current-resume">
+                      <Icon name="link" size={16} />
+                      <span>Current CV: {getResumeFileName()}</span>
+                      <span className="resume-date">Used for profile extraction and job matching</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
