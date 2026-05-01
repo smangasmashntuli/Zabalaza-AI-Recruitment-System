@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './Dashboard.css';
 import CandidateProfile from './CandidateProfile';
-import { getCandidateProfile, getMyApplications, getJobMatches, applyForJob } from './api/candidates';
+import { getCandidateProfile, getMyApplications, getJobMatches, getJobMatchesWithInsights, applyForJob } from './api/candidates';
 import { getJobs } from './api/jobs';
 import { getCurrentUser } from './api/auth';
 import { calculateAnalytics, generateInsights, calculateProfileCompletion } from './api/analytics';
@@ -65,13 +65,19 @@ function Dashboard({ onLogout }) {
 
       setApplications(formattedApps);
 
-      // Fetch job matches/recommendations
+      // Fetch job matches/recommendations (with optional conversational insights)
       try {
-        const matches = await getJobMatches(10);
+        const matchesResp = await getJobMatchesWithInsights(10);
+        const matches = Array.isArray(matchesResp) ? matchesResp : (matchesResp.items || []);
         const formattedMatches = matches.map((match, index) =>
           formatRecommendation(match, index)
         );
         setRecommendations(formattedMatches);
+
+        // If the API returned an insights string, add it to the dashboard insights
+        if (matchesResp && matchesResp.insights) {
+          setInsights((s) => [...s, { title: 'Matching Insight', message: matchesResp.insights, action: 'Update Profile' }]);
+        }
       } catch (err) {
         console.warn('Could not fetch job matches:', err);
         setRecommendations([]);

@@ -9,8 +9,10 @@ from ..schemas import (
     CandidateUpdate,
     Application as ApplicationSchema,
     ApplicationCreate,
-    JobMatch
+    JobMatch,
+    MatchesResponse,
 )
+from ..config import settings
 from ..services.ai_service import ai_service
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
@@ -203,13 +205,17 @@ def update_my_profile(
     return candidate_dict
 
 
-@router.get("/me/matches", response_model=List[JobMatch])
+@router.get("/me/matches", response_model=MatchesResponse)
 def get_job_matches(
     top_k: int = 10,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Get AI-powered job matches for current candidate."""
+    """Get AI-powered job matches for current candidate.
+
+    Returns a structured response with `items` (list of JobMatch) and `insights` which
+    contains a conversational suggestion when matches are missing or low.
+    """
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
 
     if not candidate:
@@ -264,7 +270,55 @@ def get_job_matches(
         top_k
     )
 
-    return matches
+    # If no strong matches, provide conversational guidance and suggested alternatives
+    insights = None
+    items = matches or []
+
+    # Determine if matches are below similarity threshold
+    try:
+        threshold = float(getattr(settings, 'SIMILARITY_THRESHOLD', 0.6))
+    except Exception:
+        threshold = 0.6
+
+    if not items:
+        insights = (
+            "We couldn't find close matches for your profile. "
+            "Consider adding more technical skills, uploading relevant certificates, or broadening your location or role preferences. "
+            "Below are some alternative job postings you can review."
+        )
+        # Suggest some alternatives (first N active jobs) with low match score so UI can display them
+        suggested = []
+        for job in jobs[: min(5, len(jobs))]:
+            suggested.append({
+                'job_id': job.id,
+                'job_title': job.title,
+                'match_score': 0.0,
+                'match_explanation': 'Suggested alternative — broaden your criteria',
+                'job_details': {
+                    'description': job.description,
+                    'location': job.location,
+                    'job_type': job.job_type if hasattr(job, 'job_type') else None,
+                    'salary_min': getattr(job, 'salary_min', None),
+                    'salary_max': getattr(job, 'salary_max', None),
+                }
+            })
+        items = suggested
+    else:
+        # If matches exist but average score is low, add an insight message to encourage profile improvements
+        try:
+            avg_score = sum(m.get('match_score', 0) for m in items) / max(1, len(items))
+            if avg_score < threshold:
+                insights = (
+                    f"The average match score for your top {len(items)} recommendations is {avg_score:.2f}. "
+                    "Consider enhancing your profile (skills, certificates, experience details) to improve matches."
+                )
+        except Exception:
+            insights = None
+
+    return {
+        'items': items,
+        'insights': insights
+    }
 
 
 @router.post("/me/applications", response_model=ApplicationSchema, status_code=status.HTTP_201_CREATED)

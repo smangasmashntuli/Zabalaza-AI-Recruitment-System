@@ -130,3 +130,9 @@ class JobMatch(BaseModel):
     match_explanation: str
     job_details: Optional[Dict[str, Any]] = None
 
+
+class MatchesResponse(BaseModel):
+    items: List[JobMatch]
+    insights: Optional[str] = None
+
+

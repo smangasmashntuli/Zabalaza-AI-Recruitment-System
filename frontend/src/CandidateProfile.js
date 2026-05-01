@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './CandidateProfile.css';
-import { getCandidateProfile, updateCandidateProfile, uploadResume } from './api/candidates';
+import { getCandidateProfile, updateCandidateProfile, uploadResume, uploadCertificate } from './api/candidates';
 
 function CandidateProfile({ onClose, onProfileUpdated }) {
   const [profile, setProfile] = useState(null);
@@ -140,6 +140,28 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
     } finally {
       setSaving(false);
       setResumeUploading(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleCertificateUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      setSaving(true);
+      setError(null);
+      setResumeMessage(`Uploading certificate ${file.name}...`);
+      const res = await uploadCertificate(file);
+
+      // Reload profile to reflect new certificate
+      await loadProfile();
+      setResumeMessage('Certificate uploaded successfully.');
+    } catch (err) {
+      console.error('Error uploading certificate:', err);
+      setError('Failed to upload certificate. Please try again.');
+    } finally {
+      setSaving(false);
       event.target.value = '';
     }
   };
@@ -650,12 +672,13 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
                     <Icon name="certificate" size={22} />
                     <h3 className="profile-card-title">Certifications</h3>
                   </div>
-                  {isEditing && (
-                    <button className="add-button">
-                      <Icon name="plus" size={18} />
-                      Add Certification
-                    </button>
-                  )}
+                   {isEditing && (
+                     <label className="add-button upload-cert-label">
+                       <Icon name="plus" size={18} />
+                       Upload Certificate
+                       <input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onChange={handleCertificateUpload} style={{ display: 'none' }} />
+                     </label>
+                   )}
                 </div>
                 <div className="profile-card-body">
                   <div className="certifications-list">
@@ -667,7 +690,11 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
                         <div className="certification-content">
                           <h4 className="certification-name">{cert.name}</h4>
                           <p className="certification-issuer">{cert.issuer}</p>
-                          <p className="certification-date">Issued {cert.date}</p>
+                          {cert.path ? (
+                            <a href={cert.path} target="_blank" rel="noopener noreferrer">Download</a>
+                          ) : (
+                            <p className="certification-date">Issued {cert.date}</p>
+                          )}
                         </div>
                         {isEditing && (
                           <button className="delete-button">

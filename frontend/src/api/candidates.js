@@ -20,6 +20,18 @@ export const updateCandidateProfile = async (profileData) => {
  * Get job matches for current candidate
  */
 export const getJobMatches = async (topK = 10) => {
+  const res = await get(`${API_ENDPOINTS.CANDIDATES}/me/matches?top_k=${topK}`);
+  // Backwards compatible: if API returns wrapper { items, insights } return items by default
+  if (res && typeof res === 'object' && Array.isArray(res.items)) {
+    return res.items;
+  }
+  return res;
+};
+
+/**
+ * Get job matches and conversational insights (newer API wrapper)
+ */
+export const getJobMatchesWithInsights = async (topK = 10) => {
   return get(`${API_ENDPOINTS.CANDIDATES}/me/matches?top_k=${topK}`);
 };
 
@@ -60,4 +72,30 @@ export const uploadResume = async (file) => {
 
   return response.json();
 };
+
+
+/**
+ * Upload a certificate file and attach it to the candidate profile
+ */
+export const uploadCertificate = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const token = localStorage.getItem('access_token');
+  const response = await fetch(`${API_ENDPOINTS.UPLOADS}/certificate`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to upload certificate');
+  }
+
+  return response.json();
+};
+
 

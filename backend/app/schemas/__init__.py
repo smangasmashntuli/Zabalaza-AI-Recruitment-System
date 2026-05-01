@@ -7,7 +7,8 @@ from .candidate import (
     Application,
     ApplicationCreate,
     ApplicationUpdate,
-    JobMatch
+    JobMatch,
+    MatchesResponse,
 )
 
 __all__ = [
@@ -27,5 +28,6 @@ __all__ = [
     "ApplicationCreate",
     "ApplicationUpdate",
     "JobMatch",
+    "MatchesResponse",
 ]
 

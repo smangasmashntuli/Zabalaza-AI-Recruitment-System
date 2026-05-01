@@ -231,197 +231,200 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
   }
 
   return (
-    <div className="job-portal">
-      <div className="hero-section">
-        <h1 className="hero-title">Find Your Dream Job</h1>
-        <p className="hero-subtitle">
-          Discover opportunities matched to your skills with AI-powered recommendations
-        </p>
-
-        <div className="search-bar">
-          <div className="search-input-group">
-            <span className="icon"><Icon name="search" size={18} /></span>
-            <input
-              type="text"
-              placeholder="Job title or company"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="search-input"
-            />
-          </div>
-          <div className="search-input-group">
-            <span className="icon"><Icon name="location" size={18} /></span>
-            <input
-              type="text"
-              placeholder="Location"
-              value={locationFilter}
-              onChange={(e) => setLocationFilter(e.target.value)}
-              className="search-input"
-            />
-          </div>
-          <button className="search-button" onClick={handleSearch}>
-            Search Jobs
-          </button>
-        </div>
-
-        <div className="filter-buttons">
-          <button onClick={() => setTypeFilter('all')} className={`filter-button ${typeFilter === 'all' ? 'active' : 'inactive'}`}>All Jobs</button>
-          <button onClick={() => setTypeFilter('full-time')} className={`filter-button ${typeFilter === 'full-time' ? 'active' : 'inactive'}`}>Full-time</button>
-          <button onClick={() => setTypeFilter('remote')} className={`filter-button ${typeFilter === 'remote' ? 'active' : 'inactive'}`}>Remote</button>
+    <div className="job-portal linkedin-style-layout">
+      {/* Header Section */}
+      <div className="portal-header">
+        <div className="header-content">
+          <h1 className="header-title">Top job picks for you</h1>
+          <p className="header-subtitle">
+            Based on your profile, preferences, and activity like applies, searches, and saves
+          </p>
+          <div className="results-count">{filteredJobs.length} results</div>
         </div>
       </div>
 
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-content">
-            <div className="stat-icon blue"><span className="icon-lg"><Icon name="briefcase" size={24} /></span></div>
-            <div>
-              <p className="stat-number">{jobs.length}</p>
-              <p className="stat-label">Open Positions</p>
+      {/* Split Panel Container */}
+      <div className="split-panel-container">
+        {/* Left Panel: Job List */}
+        <div className="jobs-list-panel">
+          <div className="jobs-list-header">
+            <div className="search-bar-compact">
+              <div className="search-input-group-compact">
+                <span className="icon"><Icon name="search" size={16} /></span>
+                <input
+                  type="text"
+                  placeholder="Job title"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="search-input-compact"
+                />
+              </div>
             </div>
           </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-content">
-            <div className="stat-icon green"><span className="icon-lg"><Icon name="building" size={24} /></span></div>
-            <div>
-              <p className="stat-number">{new Set(jobs.map((job) => job.recruiter_id)).size || 1}+</p>
-              <p className="stat-label">Companies Hiring</p>
-            </div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-content">
-            <div className="stat-icon purple"><span className="icon-lg"><Icon name="chart" size={24} /></span></div>
-            <div>
-              <p className="stat-number">AI</p>
-              <p className="stat-label">Powered Matching</p>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      <div className="results-header">
-        <h2>{filteredJobs.length} {filteredJobs.length === 1 ? 'Job' : 'Jobs'} Found</h2>
-      </div>
-
-      <div className="jobs-grid">
-        {filteredJobs.map((job) => {
-          const formattedJob = formatJob(job);
-          return (
-            <div key={job.id} onClick={() => setSelectedJob(job)} className="job-card">
-              <div className="job-header">
-                <div className="job-logo">{formattedJob.logo}</div>
-                <div className="job-title-section">
-                  <div className="job-title-row">
-                    <h3 className="job-title">{job.title}</h3>
-                    {formattedJob.matchScore && (
-                      <div className="match-badge">
-                        <span className="icon-sm"><Icon name="star" size={14} /></span>
-                        <span className="match-score">{formattedJob.matchScore}%</span>
+          <div className="jobs-list">
+            {filteredJobs.length === 0 ? (
+              <div className="no-jobs-message">No jobs found</div>
+            ) : (
+              filteredJobs.map((job, index) => {
+                const formattedJob = formatJob(job);
+                const isSelected = selectedJob?.id === job.id;
+                return (
+                  <div
+                    key={job.id}
+                    className={`jobs-list-item ${isSelected ? 'active' : ''}`}
+                    onClick={() => setSelectedJob(job)}
+                  >
+                    <div className="list-item-header">
+                      <div className="list-item-logo">{formattedJob.logo}</div>
+                      <div className="list-item-title-group">
+                        <div className="list-item-title">{job.title}</div>
+                        <div className="list-item-company">{formattedJob.company}</div>
                       </div>
-                    )}
-                  </div>
-                  <p className="job-company">{formattedJob.company}</p>
-                </div>
-              </div>
-
-              <div className="job-details">
-                <div className="job-detail-item"><span className="icon-sm"><Icon name="location" size={14} /></span>{job.location || 'Remote'}</div>
-                <div className="job-detail-item"><span className="icon-sm"><Icon name="money" size={14} /></span>{formattedJob.salary}</div>
-                <div className="job-detail-item"><span className="icon-sm"><Icon name="clock" size={14} /></span>{formattedJob.type} | Posted {formattedJob.posted}</div>
-              </div>
-
-              <p className="job-description">{job.description}</p>
-
-              <div className="benefits-tags">
-                {formattedJob.benefits.slice(0, 3).map((benefit, index) => (
-                  <span key={index} className="benefit-tag">{benefit}</span>
-                ))}
-              </div>
-
-              <button className="view-details-button">View Details</button>
-            </div>
-          );
-        })}
-      </div>
-
-      {selectedJob && (
-        <div className="modal-overlay" onClick={() => setSelectedJob(null)}>
-          <div className="modal-content" onClick={(event) => event.stopPropagation()}>
-            {(() => {
-              const formattedJob = formatJob(selectedJob);
-              return (
-                <>
-                  <div className="modal-header">
-                    <div className="modal-header-content">
-                      <div className="modal-job-info">
-                        <div className="modal-job-logo">{formattedJob.logo}</div>
-                        <div>
-                          <h2 className="modal-job-title">{selectedJob.title}</h2>
-                          <p className="modal-job-company">{formattedJob.company}</p>
-                          {formattedJob.matchScore && (
-                            <div className="modal-match-info">
-                              <Icon name="star" size={16} />
-                              <span className="match-percentage">{formattedJob.matchScore}% Match</span>
-                              <span className="match-text">Good fit for your profile</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <button onClick={() => setSelectedJob(null)} className="close-button">
-                        <Icon name="close" size={20} />
+                      <button className="close-item-button" onClick={(e) => {
+                        e.stopPropagation();
+                        // You can add remove functionality here if needed
+                      }}>
+                        <Icon name="close" size={14} />
                       </button>
                     </div>
+                    <div className="list-item-details">
+                      <span className="list-detail">{job.location || 'Remote'}</span>
+                      <span className="list-detail">{formattedJob.type}</span>
+                    </div>
+                    <div className="list-item-meta">
+                      {index < 3 && <span className="list-meta-badge">Recently viewed</span>}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Right Panel: Job Details */}
+        <div className="job-details-panel">
+          {selectedJob ? (
+            (() => {
+              const formattedJob = formatJob(selectedJob);
+              return (
+                <div className="job-details-content">
+                  {/* Header with back button and navigation */}
+                  <div className="details-header-top">
+                    <button className="back-button" onClick={() => setSelectedJob(null)}>
+                      <Icon name="close" size={20} />
+                    </button>
+                    <div className="details-nav-actions">
+                      <button className="nav-button" title="Previous"><Icon name="location" size={18} /></button>
+                      <button className="nav-button" title="Menu"><span style={{fontSize: '20px', fontWeight: 'bold'}}>⋯</span></button>
+                    </div>
                   </div>
 
-                  <div className="modal-body">
-                    <div className="detail-grid">
-                      <div className="detail-item"><Icon name="location" size={16} /><span>{selectedJob.location || 'Remote'}</span></div>
-                      <div className="detail-item"><Icon name="money" size={16} /><span>{formattedJob.salary}</span></div>
-                      <div className="detail-item"><Icon name="briefcase" size={16} /><span>{formattedJob.type}</span></div>
-                      <div className="detail-item"><Icon name="clock" size={16} /><span>Posted {formattedJob.posted}</span></div>
+                  {/* Company Header */}
+                  <div className="details-company-header">
+                    <div className="company-logo-large">{formattedJob.logo}</div>
+                    <div>
+                      <h2 className="details-company-name">{formattedJob.company}</h2>
                     </div>
+                  </div>
 
-                    <div className="section">
-                      <h3 className="section-title">About the Role</h3>
-                      <p className="section-text">{selectedJob.description}</p>
+                  {/* Job Title */}
+                  <h1 className="details-job-title">{selectedJob.title}</h1>
+
+                  {/* Key Info Badges */}
+                  <div className="details-badges-row">
+                    <span className="details-badge">
+                      <Icon name="check" size={16} /> On-site
+                    </span>
+                    <span className="details-badge details-badge-alt">Full-time</span>
+                  </div>
+
+                  {/* Location and Details */}
+                  <div className="details-meta-info">
+                    <div className="meta-info-item">
+                      <Icon name="location" size={16} />
+                      <span>{selectedJob.location || 'Remote'}</span>
                     </div>
+                    <div className="meta-info-item">
+                      <span className="posted-badge">{formattedJob.posted}</span>
+                    </div>
+                  </div>
 
-                    <div className="section">
-                      <h3 className="section-title">Requirements</h3>
+                  {/* Match Section */}
+                  {candidateProfile && (
+                    <div className="details-match-section">
+                      <div className="match-header">
+                        <h3>How your profile and resume fit this job</h3>
+                      </div>
+                      <div className="match-actions">
+                        <button className="match-action-button">
+                          <Icon name="star" size={18} />
+                          Show match details
+                        </button>
+                        <button className="match-action-button">
+                          <Icon name="briefcase" size={18} />
+                          Tailor my resume
+                        </button>
+                        <button className="match-action-button">
+                          <Icon name="chart" size={18} />
+                          Help me stand out
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Description */}
+                  <div className="details-section">
+                    <h3 className="details-section-title">About the role</h3>
+                    <p className="details-description">{selectedJob.description}</p>
+                  </div>
+
+                  {/* Requirements */}
+                  {formattedJob.requirements.length > 0 && (
+                    <div className="details-section">
+                      <h3 className="details-section-title">Requirements</h3>
                       <ul className="requirements-list">
-                        {formattedJob.requirements.map((requirement, index) => (
+                        {formattedJob.requirements.slice(0, 5).map((requirement, index) => (
                           <li key={index} className="requirement-item">
-                            <svg className="check-icon" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
+                            <Icon name="check" size={16} />
                             <span>{requirement}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
+                  )}
 
-                    <div className="section">
-                      <h3 className="section-title">Skills</h3>
-                      <div className="modal-benefits-tags">
+                  {/* Skills */}
+                  {formattedJob.benefits.length > 0 && (
+                    <div className="details-section">
+                      <h3 className="details-section-title">Skills</h3>
+                      <div className="details-skills-tags">
                         {formattedJob.benefits.map((benefit, index) => (
-                          <span key={index} className="modal-benefit-tag">{benefit}</span>
+                          <span key={index} className="details-skill-tag">{benefit}</span>
                         ))}
                       </div>
                     </div>
+                  )}
 
-                    <div className="modal-actions">
-                      <button onClick={() => handleApply(selectedJob)} className="apply-button">Apply Now</button>
-                      <button className="save-button">Save Job</button>
-                    </div>
+                  {/* Action Buttons */}
+                  <div className="details-actions">
+                    <button onClick={() => handleApply(selectedJob)} className="apply-button-large">
+                      <Icon name="check" size={18} />
+                      Apply
+                    </button>
+                    <button className="save-button-large">Save</button>
                   </div>
-                </>
+                </div>
               );
-            })()}
-          </div>
+            })()
+          ) : (
+            <div className="no-selection-placeholder">
+              <Icon name="briefcase" size={48} />
+              <p>Select a job to view details</p>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {showApplicationModal && selectedJob && (
         <div className="modal-overlay" onClick={() => setShowApplicationModal(false)}>

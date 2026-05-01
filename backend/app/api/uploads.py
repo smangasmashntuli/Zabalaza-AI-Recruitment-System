@@ -172,3 +172,62 @@ async def upload_resume(
 
     return response_data
 
+
+@router.post("/certificate")
+async def upload_certificate(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Upload a certificate or credential file and attach it to the candidate profile.
+
+    Certificates are optional and will only be stored if the user chooses to upload them.
+    """
+    # Accept common document and image types for certificates
+    allowed = {"application/pdf", "image/png", "image/jpeg", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+
+    effective_content_type = _get_effective_content_type(file)
+    if effective_content_type not in allowed and (file.content_type or "") not in allowed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported certificate file type")
+
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+    if not candidate:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate profile not found")
+
+    file_content = await file.read()
+    if len(file_content) > settings.MAX_FILE_SIZE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"File too large. Max size is {settings.MAX_FILE_SIZE} bytes")
+
+    upload_dir = settings.UPLOAD_DIR
+    os.makedirs(upload_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    file_extension = os.path.splitext(file.filename or "")[1]
+    filename = f"certificate_{current_user.id}_{timestamp}{file_extension}"
+    file_path = os.path.join(upload_dir, filename)
+
+    with open(file_path, "wb") as f:
+        f.write(file_content)
+
+    # Append certificate record to candidate.certifications (stored as JSON list)
+    try:
+        certs = json.loads(candidate.certifications) if candidate.certifications else []
+    except Exception:
+        certs = []
+
+    cert_record = {
+        "id": f"cert_{len(certs)+1}",
+        "name": os.path.splitext(file.filename or filename)[0],
+        "issuer": "Uploaded by candidate",
+        "date": None,
+        "path": file_path,
+    }
+
+    certs.append(cert_record)
+    candidate.certifications = json.dumps(certs)
+
+    db.commit()
+    db.refresh(candidate)
+
+    return {"success": True, "certificate": cert_record}
+
+
