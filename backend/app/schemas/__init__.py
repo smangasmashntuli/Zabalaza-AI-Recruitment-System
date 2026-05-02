@@ -10,6 +10,8 @@ from .candidate import (
     JobMatch,
     MatchesResponse,
     CareerPathResponse,
+    ChatRequest,
+    ChatMessage,
 )
 
 __all__ = [
@@ -31,5 +33,7 @@ __all__ = [
     "JobMatch",
     "MatchesResponse",
     "CareerPathResponse",
+    "ChatRequest",
+    "ChatMessage",
 ]
 

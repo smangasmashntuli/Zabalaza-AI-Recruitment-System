@@ -4,6 +4,7 @@ import Login from './Login';
 import SignUp from './SignUp';
 import Dashboard from './Dashboard';
 import { AUTH_CHANGED_EVENT, isAuthenticated as hasValidSession, logoutUser } from './api/auth';
+import ChatBot from './ChatBot';
 
 function App() {
   const [showLogin, setShowLogin] = useState(true);
@@ -55,6 +56,7 @@ function App() {
       ) : (
         <SignUp onSwitchToLogin={() => setShowLogin(true)} />
       )}
+      {isAuthenticated && <ChatBot />}
     </div>
   );
 }
