@@ -57,6 +57,34 @@ export const optimizeCvSection = async (section) => {
 };
 
 /**
+ * Get detailed match analysis for a job
+ */
+export const getMatchAnalysis = async (jobId) => {
+  return get(`${API_ENDPOINTS.CANDIDATES}/me/match-analysis?job_id=${jobId}`);
+};
+
+/**
+ * Get resume tailoring suggestions for a job
+ */
+export const getResumeTailoringTips = async (jobId) => {
+  return get(`${API_ENDPOINTS.CANDIDATES}/me/resume-tailoring?job_id=${jobId}`);
+};
+
+/**
+ * Get profile improvement tips
+ */
+export const getProfileImprovementTips = async () => {
+  return get(`${API_ENDPOINTS.CANDIDATES}/me/profile-improvement`);
+};
+
+/**
+ * Chat with Gemini career advisor
+ */
+export const chatWithGemini = async (message, history = null) => {
+  return post(`${API_ENDPOINTS.CANDIDATES}/me/chat`, { message, history });
+};
+
+/**
  * Apply for a job
  */
 export const applyForJob = async (applicationData) => {

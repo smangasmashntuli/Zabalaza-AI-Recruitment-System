@@ -145,3 +145,11 @@ class CareerPathResponse(BaseModel):
     next_roles: Optional[List[str]] = None
 
 
+class ChatMessage(BaseModel):
+    user: Optional[str] = None
+    assistant: Optional[str] = None
+
+
+class ChatRequest(BaseModel):
+    message: str
+    history: Optional[List[Dict[str, str]]] = None
