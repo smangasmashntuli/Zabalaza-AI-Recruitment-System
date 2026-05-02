@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import './JobPortal.css';
 import { getHybridJobs, searchHybridJobs } from './api/jobs';
-import { applyForJob, getCandidateProfile } from './api/candidates';
+import { applyForJob, getCandidateProfile, getInterviewTips } from './api/candidates';
 
 const Icon = ({ name, size = 20 }) => {
   const icons = {
@@ -40,10 +40,13 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
   const [selectedJob, setSelectedJob] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all');
+  const [typeFilter] = useState('all');
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applicationData, setApplicationData] = useState({ coverLetter: '' });
+  const [interviewTips, setInterviewTips] = useState('');
+  const [interviewTipsLoading, setInterviewTipsLoading] = useState(false);
+  const [interviewTipsError, setInterviewTipsError] = useState('');
 
   const hasResumeProfile = Boolean(candidateProfile?.resume_path || candidateProfile?.resume_text);
 
@@ -102,8 +105,8 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
   };
 
   const formatJob = (job) => {
-    let requirements = [];
-    let skills = [];
+    let requirements;
+    let skills;
 
     try {
       requirements = typeof job.requirements === 'string' ? JSON.parse(job.requirements) : job.requirements;
@@ -151,6 +154,27 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
 
     setSelectedJob(job);
     setShowApplicationModal(true);
+  };
+
+  const handleInterviewTips = async () => {
+    if (!selectedJob) return;
+
+    const jobId = selectedJob.job_id || selectedJob.id;
+    if (!jobId || (selectedJob.source && selectedJob.source !== 'internal')) {
+      setInterviewTipsError('Interview tips are only available for internal jobs right now.');
+      return;
+    }
+
+    try {
+      setInterviewTipsLoading(true);
+      setInterviewTipsError('');
+      const result = await getInterviewTips(jobId);
+      setInterviewTips(result?.interview_tips || 'No interview tips were generated.');
+    } catch (err) {
+      setInterviewTipsError(err.message || 'Failed to generate interview tips');
+    } finally {
+      setInterviewTipsLoading(false);
+    }
   };
 
   const submitApplication = async (event) => {
@@ -256,9 +280,13 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
                   placeholder="Job title"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                   className="search-input-compact"
                 />
               </div>
+              <button className="job-portal-state-button" type="button" onClick={handleSearch}>
+                Search
+              </button>
             </div>
           </div>
 
@@ -369,7 +397,22 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
                           <Icon name="chart" size={18} />
                           Help me stand out
                         </button>
+                        <button className="match-action-button" onClick={handleInterviewTips} disabled={interviewTipsLoading}>
+                          <Icon name="clock" size={18} />
+                          {interviewTipsLoading ? 'Generating tips...' : 'Interview tips'}
+                        </button>
                       </div>
+                    </div>
+                  )}
+
+                  {(interviewTips || interviewTipsError) && (
+                    <div className="details-section" style={{ background: 'rgba(14,165,233,0.06)', borderRadius: '16px', padding: '16px' }}>
+                      <h3 className="details-section-title">Gemini Interview Prep</h3>
+                      {interviewTipsError ? (
+                        <p style={{ color: '#b91c1c' }}>{interviewTipsError}</p>
+                      ) : (
+                        <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit', lineHeight: 1.6 }}>{interviewTips}</pre>
+                      )}
                     </div>
                   )}
 

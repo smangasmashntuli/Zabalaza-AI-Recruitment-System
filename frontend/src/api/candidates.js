@@ -36,6 +36,27 @@ export const getJobMatchesWithInsights = async (topK = 10) => {
 };
 
 /**
+ * Get AI-powered career path recommendations
+ */
+export const getCareerPath = async () => {
+  return get(`${API_ENDPOINTS.CANDIDATES}/me/career-path`);
+};
+
+/**
+ * Get interview tips for a specific job
+ */
+export const getInterviewTips = async (jobId) => {
+  return post(`${API_ENDPOINTS.CANDIDATES}/me/interview-tips?job_id=${encodeURIComponent(jobId)}`, {});
+};
+
+/**
+ * Optimize a CV section using Gemini
+ */
+export const optimizeCvSection = async (section) => {
+  return post(`${API_ENDPOINTS.CANDIDATES}/me/cv-optimization?section=${encodeURIComponent(section)}`, {});
+};
+
+/**
  * Apply for a job
  */
 export const applyForJob = async (applicationData) => {

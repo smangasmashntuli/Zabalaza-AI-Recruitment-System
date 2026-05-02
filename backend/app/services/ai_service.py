@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 from .resume_parser import ResumeParser
 from .matching_engine import MatchingEngine
 

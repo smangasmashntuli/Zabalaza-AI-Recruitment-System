@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './Dashboard.css';
 import CandidateProfile from './CandidateProfile';
-import { getCandidateProfile, getMyApplications, getJobMatches, getJobMatchesWithInsights, applyForJob } from './api/candidates';
+import { getCandidateProfile, getMyApplications, getJobMatchesWithInsights, getCareerPath, applyForJob } from './api/candidates';
 import { getJobs } from './api/jobs';
 import { getCurrentUser } from './api/auth';
 import { calculateAnalytics, generateInsights, calculateProfileCompletion } from './api/analytics';
@@ -17,6 +17,9 @@ function Dashboard({ onLogout }) {
   const [showProfile, setShowProfile] = useState(false);
   const [candidateProfile, setCandidateProfile] = useState(null);
   const [showBusinessMenu, setShowBusinessMenu] = useState(false);
+  const [careerPath, setCareerPath] = useState(null);
+  const [careerPathNextRoles, setCareerPathNextRoles] = useState([]);
+  const [careerPathSkills, setCareerPathSkills] = useState([]);
 
   // Dynamic data state
   const [loading, setLoading] = useState(true);
@@ -70,13 +73,33 @@ function Dashboard({ onLogout }) {
         const matchesResp = await getJobMatchesWithInsights(10);
         const matches = Array.isArray(matchesResp) ? matchesResp : (matchesResp.items || []);
         const formattedMatches = matches.map((match, index) =>
-          formatRecommendation(match, index)
+          ({
+            ...formatRecommendation(match, index),
+            matchExplanation: match.match_explanation || '',
+            skillGaps: match.skill_gaps || [],
+            strengths: match.strengths || [],
+          })
         );
         setRecommendations(formattedMatches);
 
         // If the API returned an insights string, add it to the dashboard insights
         if (matchesResp && matchesResp.insights) {
           setInsights((s) => [...s, { title: 'Matching Insight', message: matchesResp.insights, action: 'Update Profile' }]);
+        }
+
+        if (matchesResp && matchesResp.career_path) {
+          setCareerPath(matchesResp.career_path);
+        }
+
+        try {
+          const careerResp = await getCareerPath();
+          setCareerPath(careerResp?.career_path || matchesResp?.career_path || null);
+          setCareerPathNextRoles(Array.isArray(careerResp?.next_roles) ? careerResp.next_roles : []);
+          setCareerPathSkills(Array.isArray(careerResp?.learning_recommendations) ? careerResp.learning_recommendations : []);
+        } catch (careerErr) {
+          if (!matchesResp?.career_path) {
+            console.warn('Could not fetch career path guidance:', careerErr);
+          }
         }
       } catch (err) {
         console.warn('Could not fetch job matches:', err);
@@ -245,11 +268,9 @@ function Dashboard({ onLogout }) {
     },
   ];
 
-  const learningRecommendations = [
-    ...new Set(
-      nearMatches.flatMap((job) => job.missingSkills || [])
-    ),
-  ].slice(0, 4);
+  const learningRecommendations = careerPathSkills.length > 0
+    ? careerPathSkills.slice(0, 4)
+    : [...new Set(nearMatches.flatMap((job) => job.missingSkills || []))].slice(0, 4);
 
   const discoverTips = [
     !candidateProfile?.resume_text && 'Upload your resume to unlock deeper AI matching.',
@@ -290,6 +311,41 @@ function Dashboard({ onLogout }) {
         </div>
       </section>
 
+      {careerPath && (
+        <section className="discover-section">
+          <div
+            className="discover-career-card"
+            style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(14,165,233,0.10))', borderRadius: '20px', padding: '20px', border: '1px solid rgba(99,102,241,0.18)' }}
+          >
+            <div className="discover-section-header" style={{ marginBottom: '12px' }}>
+              <h3>Gemini Career Guidance</h3>
+              <span>LLM-powered next-step advice</span>
+            </div>
+            <p style={{ margin: 0, lineHeight: 1.6 }}>{careerPath}</p>
+            {(careerPathNextRoles.length > 0 || learningRecommendations.length > 0) && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginTop: '16px' }}>
+                {careerPathNextRoles.length > 0 && (
+                  <div style={{ background: 'rgba(255,255,255,0.6)', borderRadius: '16px', padding: '14px' }}>
+                    <strong>Next roles</strong>
+                    <ul style={{ margin: '10px 0 0 18px' }}>
+                      {careerPathNextRoles.slice(0, 3).map((role) => <li key={role}>{role}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {learningRecommendations.length > 0 && (
+                  <div style={{ background: 'rgba(255,255,255,0.6)', borderRadius: '16px', padding: '14px' }}>
+                    <strong>Learning focus</strong>
+                    <ul style={{ margin: '10px 0 0 18px' }}>
+                      {learningRecommendations.map((skill) => <li key={skill}>{skill}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       <section className="discover-section">
         <div className="discover-section-header">
           <h3>Top Matches</h3>
@@ -310,6 +366,9 @@ function Dashboard({ onLogout }) {
                 </div>
                 <h4>{job.position}</h4>
                 <p className="discover-company-name">{job.company}</p>
+                {job.matchExplanation && (
+                  <p style={{ fontSize: '0.92rem', lineHeight: 1.5, color: '#475569' }}>{job.matchExplanation}</p>
+                )}
                 <div className="discover-meta-row">
                   <span><Icon name="location" size={14} /> {job.location}</span>
                   <span><Icon name="money" size={14} /> {job.salary}</span>
@@ -853,6 +912,36 @@ function Dashboard({ onLogout }) {
 
                         <h4 className="rec-title">{job.position}</h4>
                         <p className="rec-company">{job.company}</p>
+                        {job.matchExplanation && (
+                          <p style={{ margin: '8px 0 0', color: '#475569', lineHeight: 1.5 }}>
+                            {job.matchExplanation}
+                          </p>
+                        )}
+
+                        {(job.strengths?.length > 0 || job.skillGaps?.length > 0) && (
+                          <div style={{ marginTop: '12px', display: 'grid', gap: '8px' }}>
+                            {job.strengths?.length > 0 && (
+                              <div>
+                                <strong style={{ fontSize: '0.82rem' }}>Strengths</strong>
+                                <div className="rec-tags" style={{ marginTop: '6px' }}>
+                                  {job.strengths.slice(0, 3).map((item) => (
+                                    <span key={item} className="rec-tag">{item}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {job.skillGaps?.length > 0 && (
+                              <div>
+                                <strong style={{ fontSize: '0.82rem' }}>Skills to learn</strong>
+                                <div className="rec-tags" style={{ marginTop: '6px' }}>
+                                  {job.skillGaps.slice(0, 3).map((item) => (
+                                    <span key={item} className="rec-tag-more">{item}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         <div className="rec-details">
                           <span className="rec-detail">
