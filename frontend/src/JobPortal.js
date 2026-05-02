@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import './JobPortal.css';
 import { getHybridJobs, searchHybridJobs } from './api/jobs';
-import { applyForJob, getCandidateProfile, getInterviewTips } from './api/candidates';
+import { applyForJob, getCandidateProfile, getInterviewTips, getMatchAnalysis, getResumeTailoringTips, getProfileImprovementTips } from './api/candidates';
 
 const Icon = ({ name, size = 20 }) => {
   const icons = {
@@ -47,6 +47,13 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
   const [interviewTips, setInterviewTips] = useState('');
   const [interviewTipsLoading, setInterviewTipsLoading] = useState(false);
   const [interviewTipsError, setInterviewTipsError] = useState('');
+  const [matchAnalysis, setMatchAnalysis] = useState(null);
+  const [matchAnalysisLoading, setMatchAnalysisLoading] = useState(false);
+  const [resumeTailoringTips, setResumeTailoringTips] = useState('');
+  const [tailoringLoading, setTailoringLoading] = useState(false);
+  const [profileImprovementTips, setProfileImprovementTips] = useState('');
+  const [improvementLoading, setImprovementLoading] = useState(false);
+  const [expandedSection, setExpandedSection] = useState(null);
 
   const hasResumeProfile = Boolean(candidateProfile?.resume_path || candidateProfile?.resume_text);
 
@@ -170,10 +177,74 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
       setInterviewTipsError('');
       const result = await getInterviewTips(jobId);
       setInterviewTips(result?.interview_tips || 'No interview tips were generated.');
+      setExpandedSection('interview-tips');
     } catch (err) {
       setInterviewTipsError(err.message || 'Failed to generate interview tips');
     } finally {
       setInterviewTipsLoading(false);
+    }
+  };
+
+  const handleMatchDetails = async () => {
+    if (!selectedJob) return;
+
+    const jobId = selectedJob.job_id || selectedJob.id;
+    if (!jobId || (selectedJob.source && selectedJob.source !== 'internal')) {
+      alert('Match details are only available for internal jobs.');
+      return;
+    }
+
+    try {
+      setMatchAnalysisLoading(true);
+      const result = await getMatchAnalysis(jobId);
+      setMatchAnalysis(result);
+      setExpandedSection('match-details');
+    } catch (err) {
+      setMatchAnalysis({ error: err.message || 'Failed to get match analysis' });
+    } finally {
+      setMatchAnalysisLoading(false);
+    }
+  };
+
+  const handleTailorResume = async () => {
+    if (!selectedJob) return;
+
+    const jobId = selectedJob.job_id || selectedJob.id;
+    if (!jobId || (selectedJob.source && selectedJob.source !== 'internal')) {
+      alert('Resume tailoring is only available for internal jobs.');
+      return;
+    }
+
+    try {
+      setTailoringLoading(true);
+      const result = await getResumeTailoringTips(jobId);
+      setResumeTailoringTips(result?.suggestions || 'No suggestions available.');
+      setExpandedSection('tailor-resume');
+    } catch (err) {
+      setResumeTailoringTips('Failed to get tailoring suggestions.');
+    } finally {
+      setTailoringLoading(false);
+    }
+  };
+
+  const handleHelpStandOut = async () => {
+    if (!selectedJob) return;
+
+    const jobId = selectedJob.job_id || selectedJob.id;
+    if (!jobId || (selectedJob.source && selectedJob.source !== 'internal')) {
+      alert('This feature is only available for internal jobs.');
+      return;
+    }
+
+    try {
+      setImprovementLoading(true);
+      const result = await getProfileImprovementTips();
+      setProfileImprovementTips(result?.improvements || 'No improvements available.');
+      setExpandedSection('help-stand-out');
+    } catch (err) {
+      setProfileImprovementTips('Failed to get improvement suggestions.');
+    } finally {
+      setImprovementLoading(false);
     }
   };
 
@@ -385,23 +456,82 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
                         <h3>How your profile and resume fit this job</h3>
                       </div>
                       <div className="match-actions">
-                        <button className="match-action-button">
+                        <button 
+                          className="match-action-button"
+                          onClick={handleMatchDetails}
+                          disabled={matchAnalysisLoading}
+                        >
                           <Icon name="star" size={18} />
-                          Show match details
+                          {matchAnalysisLoading ? 'Analyzing...' : 'Show match details'}
                         </button>
-                        <button className="match-action-button">
+                        <button 
+                          className="match-action-button"
+                          onClick={handleTailorResume}
+                          disabled={tailoringLoading}
+                        >
                           <Icon name="briefcase" size={18} />
-                          Tailor my resume
+                          {tailoringLoading ? 'Tailoring...' : 'Tailor my resume'}
                         </button>
-                        <button className="match-action-button">
+                        <button 
+                          className="match-action-button"
+                          onClick={handleHelpStandOut}
+                          disabled={improvementLoading}
+                        >
                           <Icon name="chart" size={18} />
-                          Help me stand out
+                          {improvementLoading ? 'Fetching tips...' : 'Help me stand out'}
                         </button>
                         <button className="match-action-button" onClick={handleInterviewTips} disabled={interviewTipsLoading}>
                           <Icon name="clock" size={18} />
                           {interviewTipsLoading ? 'Generating tips...' : 'Interview tips'}
                         </button>
                       </div>
+                    </div>
+                  )}
+
+                  {matchAnalysis && matchAnalysis !== null && expandedSection === 'match-details' && !matchAnalysis.error && (
+                    <div className="details-section" style={{ background: 'rgba(14,165,233,0.06)', borderRadius: '16px', padding: '16px' }}>
+                      <h3 className="details-section-title">Match Analysis</h3>
+                      <p><strong>Summary:</strong> {matchAnalysis.summary}</p>
+                      {matchAnalysis.strengths?.length > 0 && (
+                        <div style={{ marginTop: '12px' }}>
+                          <strong>Your Strengths:</strong>
+                          <ul style={{ marginTop: '8px' }}>
+                            {matchAnalysis.strengths.map((s, i) => <li key={i}>{s}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                      {matchAnalysis.gaps?.length > 0 && (
+                        <div style={{ marginTop: '12px' }}>
+                          <strong>Skill Gaps:</strong>
+                          <ul style={{ marginTop: '8px' }}>
+                            {matchAnalysis.gaps.map((g, i) => <li key={i}>{g}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                      {matchAnalysis.recommendations && (
+                        <div style={{ marginTop: '12px' }}>
+                          <strong>Recommendations:</strong>
+                          <p style={{ marginTop: '8px' }}>{matchAnalysis.recommendations}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {resumeTailoringTips && expandedSection === 'tailor-resume' && (
+                    <div className="details-section" style={{ background: 'rgba(14,165,233,0.06)', borderRadius: '16px', padding: '16px' }}>
+                      <h3 className="details-section-title">Resume Tailoring Tips</h3>
+                      <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit', lineHeight: 1.6 }}>
+                        {resumeTailoringTips}
+                      </pre>
+                    </div>
+                  )}
+
+                  {profileImprovementTips && expandedSection === 'help-stand-out' && (
+                    <div className="details-section" style={{ background: 'rgba(14,165,233,0.06)', borderRadius: '16px', padding: '16px' }}>
+                      <h3 className="details-section-title">How to Stand Out</h3>
+                      <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit', lineHeight: 1.6 }}>
+                        {profileImprovementTips}
+                      </pre>
                     </div>
                   )}
 
