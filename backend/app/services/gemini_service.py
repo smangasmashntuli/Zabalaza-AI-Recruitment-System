@@ -392,6 +392,164 @@ Return ONLY the 2-3 sentence pitch.
             logger.error(f"❌ Error summarizing for recruiter: {e}")
             return candidate_summary
 
+    def analyze_match_details(
+        self,
+        job_title: str,
+        job_description: str,
+        job_requirements: List[str],
+        candidate_skills: List[str],
+        candidate_experience: str,
+        match_score: float
+    ) -> Dict:
+        """Generate detailed match analysis with strengths and gaps."""
+        if not self.enabled:
+            return {
+                "summary": "Match analysis not available",
+                "strengths": [],
+                "gaps": [],
+                "recommendations": ""
+            }
+
+        try:
+            prompt = f"""
+Analyze the match between this candidate and job in detail.
+
+Job: {job_title}
+Requirements: {', '.join(job_requirements[:8])}
+Description: {job_description[:400]}
+
+Candidate Skills: {', '.join(candidate_skills[:10])}
+Experience: {candidate_experience[:300]}
+Match Score: {match_score:.0%}
+
+Return a JSON object with exactly this format (no markdown):
+{{
+  "summary": "1-2 sentence overall assessment",
+  "strengths": ["strength1", "strength2", "strength3"],
+  "gaps": ["gap1", "gap2"],
+  "recommendations": "Specific actions to improve chances"
+}}
+"""
+            response = self.client.generate_content(prompt)
+            try:
+                result = json.loads(response.text)
+                return result
+            except:
+                return {
+                    "summary": response.text[:200],
+                    "strengths": [],
+                    "gaps": [],
+                    "recommendations": ""
+                }
+        except Exception as e:
+            logger.error(f"❌ Error analyzing match details: {e}")
+            return {
+                "summary": "Analysis error",
+                "strengths": [],
+                "gaps": [],
+                "recommendations": ""
+            }
+
+    def get_resume_tailoring_suggestions(
+        self,
+        job_title: str,
+        job_description: str,
+        current_resume: str
+    ) -> str:
+        """Get specific suggestions to tailor resume for this job."""
+        if not self.enabled:
+            return "Resume tailoring suggestions not available."
+
+        try:
+            prompt = f"""
+Help this candidate tailor their resume for the following job. Provide specific, actionable suggestions.
+
+Target Job: {job_title}
+Job Description: {job_description[:400]}
+
+Current Resume Summary:
+{current_resume[:500]}
+
+Provide 3-4 specific bullet points on how to tailor the resume. Focus on:
+1. Keywords from job description to include
+2. Experience to highlight
+3. Achievements to reframe
+4. Skills to emphasize
+
+Keep suggestions concise and actionable.
+"""
+            response = self.client.generate_content(prompt)
+            return response.text.strip()
+        except Exception as e:
+            logger.error(f"❌ Error getting resume tailoring suggestions: {e}")
+            return "Could not generate suggestions at this time."
+
+    def get_profile_improvement_tips(
+        self,
+        current_skills: List[str],
+        experience_years: float,
+        current_title: str,
+        job_market_focus: str = "general"
+    ) -> str:
+        """Get tips to improve profile and stand out."""
+        if not self.enabled:
+            return "Profile improvement tips not available."
+
+        try:
+            prompt = f"""
+As a career coach, provide specific, actionable tips to help this candidate stand out in the {job_market_focus} job market.
+
+Current Profile:
+- Title: {current_title}
+- Years of experience: {experience_years}
+- Current skills: {', '.join(current_skills[:12])}
+
+Provide 4-5 specific tips that include:
+1. Skills to develop
+2. Certifications or learning opportunities
+3. Projects or experience to build
+4. Networking or visibility strategies
+5. Portfolio or GitHub improvements
+
+Be specific and practical.
+"""
+            response = self.client.generate_content(prompt)
+            return response.text.strip()
+        except Exception as e:
+            logger.error(f"❌ Error getting profile improvement tips: {e}")
+            return "Could not generate tips at this time."
+
+    def chat(self, user_message: str, conversation_history: Optional[List[Dict]] = None) -> str:
+        """Have a conversational chat with the LLM."""
+        if not self.enabled:
+            return "Chat feature is not available at this time."
+
+        try:
+            # Build context from history
+            messages = []
+            if conversation_history:
+                context = "\n".join([
+                    f"User: {msg['user']}\nAssistant: {msg['assistant']}"
+                    for msg in conversation_history[-3:]  # Last 3 exchanges
+                ])
+            else:
+                context = ""
+
+            full_prompt = f"""
+You are a helpful career advisor chatbot. Be friendly, conversational, and specific.
+Answer questions about job search, career development, resume building, and interview prep.
+
+{f'Previous conversation:{context}' if context else 'This is the start of the conversation.'}
+
+User: {user_message}
+
+Provide a helpful, concise response (under 300 words).
+"""
+            response = self.client.generate_content(full_prompt)
+            return response.text.strip()
+        except Exception as e:
+            logger.error(f"❌ Error in chat: {e}")
+            return "I'm having trouble responding right now. Please try again."
 
 # Global Gemini service instance
 def create_gemini_service() -> GeminiService:
