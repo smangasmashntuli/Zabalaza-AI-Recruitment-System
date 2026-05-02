@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional, Dict
 import json
 import logging
 from ..core.dependencies import get_db, get_current_active_user
@@ -13,6 +13,7 @@ from ..schemas import (
     JobMatch,
     MatchesResponse,
     CareerPathResponse,
+    ChatRequest,
 )
 from ..config import settings
 from ..services.ai_service import ai_service
@@ -603,4 +604,145 @@ def get_my_applications(
     ).all()
 
     return applications
+
+
+@router.get("/me/match-analysis")
+def get_match_analysis(
+    job_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get detailed match analysis for a specific job."""
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    try:
+        from ..services.gemini_service import get_gemini_service
+        gemini = get_gemini_service()
+        
+        candidate_skills = []
+        try:
+            candidate_skills = json.loads(candidate.skills) if candidate.skills else []
+        except:
+            candidate_skills = []
+        
+        job_requirements = []
+        try:
+            job_requirements = json.loads(job.requirements) if job.requirements else []
+        except:
+            job_requirements = [job.requirements] if job.requirements else []
+
+        match_score = 0.0
+        if candidate.embedding and job.embedding:
+            try:
+                from ..services.matching_engine import MatchingEngine
+                engine = MatchingEngine()
+                candidate_emb = json.loads(candidate.embedding)
+                job_emb = json.loads(job.embedding)
+                match_score = engine.calculate_similarity(candidate_emb, job_emb)
+            except:
+                match_score = 0.0
+
+        analysis = gemini.analyze_match_details(
+            job_title=job.title,
+            job_description=job.description,
+            job_requirements=job_requirements,
+            candidate_skills=candidate_skills,
+            candidate_experience=candidate.resume_text[:300] if candidate.resume_text else "",
+            match_score=match_score
+        )
+        return analysis
+    except Exception as e:
+        logger.error(f"Error analyzing match: {e}")
+        return {
+            "summary": "Analysis temporarily unavailable",
+            "strengths": [],
+            "gaps": [],
+            "recommendations": ""
+        }
+
+
+@router.get("/me/resume-tailoring")
+def get_resume_tailoring(
+    job_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get resume tailoring suggestions for a specific job."""
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    try:
+        from ..services.gemini_service import get_gemini_service
+        gemini = get_gemini_service()
+        
+        suggestions = gemini.get_resume_tailoring_suggestions(
+            job_title=job.title,
+            job_description=job.description,
+            current_resume=candidate.resume_text[:500] if candidate.resume_text else candidate.profile_summary or ""
+        )
+        return {"suggestions": suggestions}
+    except Exception as e:
+        logger.error(f"Error getting resume tailoring: {e}")
+        return {"suggestions": "Tailoring suggestions not available"}
+
+
+@router.get("/me/profile-improvement")
+def get_profile_improvement(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get tips to improve profile and stand out."""
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+
+    try:
+        from ..services.gemini_service import get_gemini_service
+        gemini = get_gemini_service()
+        
+        skills = []
+        try:
+            skills = json.loads(candidate.skills) if candidate.skills else []
+        except:
+            skills = []
+
+        tips = gemini.get_profile_improvement_tips(
+            current_skills=skills,
+            experience_years=candidate.experience_years or 0,
+            current_title=candidate.title or "Professional",
+            job_market_focus="tech"  # Can be parameterized
+        )
+        return {"improvements": tips}
+    except Exception as e:
+        logger.error(f"Error getting improvement tips: {e}")
+        return {"improvements": "Improvement tips not available"}
+
+
+@router.post("/me/chat")
+def chat_with_gemini(
+    request: ChatRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Chat with Gemini career advisor."""
+    try:
+        from ..services.gemini_service import get_gemini_service
+        gemini = get_gemini_service()
+        
+        response = gemini.chat(request.message, request.history)
+        return {"response": response}
+    except Exception as e:
+        logger.error(f"Error in chat endpoint: {e}")
+        return {"response": "I encountered an error. Please try again."}
 
