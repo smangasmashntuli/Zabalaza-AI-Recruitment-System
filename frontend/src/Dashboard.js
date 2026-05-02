@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './Dashboard.css';
 import CandidateProfile from './CandidateProfile';
-import { getCandidateProfile, getMyApplications, getJobMatchesWithInsights, getCareerPath, applyForJob } from './api/candidates';
+import { getCandidateProfile, getMyApplications, getJobMatchesWithInsights, getCareerPath, getProfileImprovementTips, applyForJob } from './api/candidates';
 import { getJobs } from './api/jobs';
 import { getCurrentUser } from './api/auth';
 import { calculateAnalytics, generateInsights, calculateProfileCompletion } from './api/analytics';
@@ -20,6 +20,8 @@ function Dashboard({ onLogout }) {
   const [careerPath, setCareerPath] = useState(null);
   const [careerPathNextRoles, setCareerPathNextRoles] = useState([]);
   const [careerPathSkills, setCareerPathSkills] = useState([]);
+  const [profileImprovementTips, setProfileImprovementTips] = useState('');
+  const [improvementTipsLoading, setImprovementTipsLoading] = useState(false);
 
   // Dynamic data state
   const [loading, setLoading] = useState(true);
@@ -100,6 +102,17 @@ function Dashboard({ onLogout }) {
           if (!matchesResp?.career_path) {
             console.warn('Could not fetch career path guidance:', careerErr);
           }
+        }
+
+        // Load profile improvement tips
+        try {
+          setImprovementTipsLoading(true);
+          const improvementResp = await getProfileImprovementTips();
+          setProfileImprovementTips(improvementResp?.improvements || '');
+        } catch (improvementErr) {
+          console.warn('Could not fetch improvement tips:', improvementErr);
+        } finally {
+          setImprovementTipsLoading(false);
         }
       } catch (err) {
         console.warn('Could not fetch job matches:', err);
@@ -482,10 +495,14 @@ function Dashboard({ onLogout }) {
       <section className="discover-section">
         <div className="discover-section-header">
           <h3>Profile Improvement Tips</h3>
-          <span>Generated from your current profile signals</span>
+            <span>{improvementTipsLoading ? 'Loading...' : 'Personalized recommendations'}</span>
         </div>
         <div className="discover-tips">
-          {discoverTips.length === 0 ? (
+            {profileImprovementTips ? (
+              <pre style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontFamily: 'inherit' }}>
+                {profileImprovementTips}
+              </pre>
+            ) : discoverTips.length === 0 ? (
             <div className="discover-empty-card compact">
               <Icon name="sparkles" size={24} />
               <p>Your profile already covers the core recommendation inputs.</p>
