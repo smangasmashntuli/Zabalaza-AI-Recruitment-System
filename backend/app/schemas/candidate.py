@@ -129,10 +129,19 @@ class JobMatch(BaseModel):
     match_score: float
     match_explanation: str
     job_details: Optional[Dict[str, Any]] = None
+    skill_gaps: Optional[List[str]] = None  # Skills candidate lacks but job requires
+    strengths: Optional[List[str]] = None   # Matching strengths
 
 
 class MatchesResponse(BaseModel):
     items: List[JobMatch]
     insights: Optional[str] = None
+    career_path: Optional[str] = None  # Career development suggestions
+
+
+class CareerPathResponse(BaseModel):
+    career_path: str
+    learning_recommendations: Optional[List[str]] = None
+    next_roles: Optional[List[str]] = None
 
 

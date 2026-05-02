@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 import json
+import logging
 from ..core.dependencies import get_db, get_current_active_user
 from ..models import User, Candidate, Application, Job, ApplicationStatus
 from ..schemas import (
@@ -11,11 +12,13 @@ from ..schemas import (
     ApplicationCreate,
     JobMatch,
     MatchesResponse,
+    CareerPathResponse,
 )
 from ..config import settings
 from ..services.ai_service import ai_service
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/me", response_model=CandidateSchema)
@@ -270,9 +273,44 @@ def get_job_matches(
         top_k
     )
 
+    # Enhance matches with LLM-powered explanations
+    items = []
+    if matches:
+        for match in matches:
+            # Try to get Gemini-powered match explanation
+            match_explanation = match.get('match_explanation', 'Good match for your profile')
+            try:
+                job_id = match.get('job_id')
+                job = next((j for j in jobs if j.id == job_id), None)
+                if job:
+                    job_dict_full = {
+                        'title': job.title,
+                        'description': job.description,
+                        'requirements': job.requirements,
+                        'requirements_list': getattr(job, 'requirements_list', []),
+                    }
+                    match_explanation = ai_service.generate_match_explanation(
+                        job_dict_full,
+                        candidate_dict,
+                        match.get('match_score', 0)
+                    )
+            except Exception as e:
+                # If LLM fails, use the fallback explanation
+                pass
+
+            items.append({
+                'job_id': match.get('job_id'),
+                'job_title': match.get('job_title', 'Position'),
+                'match_score': match.get('match_score', 0),
+                'match_explanation': match_explanation,
+                'skill_gaps': match.get('skill_gaps', []),
+                'strengths': match.get('strengths', []),
+                'job_details': match.get('job_details', {})
+            })
+
     # If no strong matches, provide conversational guidance and suggested alternatives
     insights = None
-    items = matches or []
+    career_path = None
 
     # Determine if matches are below similarity threshold
     try:
@@ -286,6 +324,12 @@ def get_job_matches(
             "Consider adding more technical skills, uploading relevant certificates, or broadening your location or role preferences. "
             "Below are some alternative job postings you can review."
         )
+        # Get career path suggestions
+        try:
+            career_path = ai_service.generate_career_path(candidate_dict)
+        except Exception:
+            career_path = None
+
         # Suggest some alternatives (first N active jobs) with low match score so UI can display them
         suggested = []
         for job in jobs[: min(5, len(jobs))]:
@@ -304,24 +348,162 @@ def get_job_matches(
             })
         items = suggested
     else:
-        # If matches exist but average score is low, add an insight message to encourage profile improvements
+        # If matches exist but average score is low, add an insight message and suggest career path development
         try:
             avg_score = sum(m.get('match_score', 0) for m in items) / max(1, len(items))
             if avg_score < threshold:
                 insights = (
-                    f"The average match score for your top {len(items)} recommendations is {avg_score:.2f}. "
+                    f"The average match score for your top {len(items)} recommendations is {avg_score:.2%}. "
                     "Consider enhancing your profile (skills, certificates, experience details) to improve matches."
                 )
+                # Get career path suggestions when matches are low
+                try:
+                    career_path = ai_service.generate_career_path(candidate_dict)
+                except Exception:
+                    pass
         except Exception:
             insights = None
 
     return {
         'items': items,
-        'insights': insights
+        'insights': insights,
+        'career_path': career_path
     }
 
 
-@router.post("/me/applications", response_model=ApplicationSchema, status_code=status.HTTP_201_CREATED)
+@router.get("/me/career-path", response_model=CareerPathResponse)
+def get_career_path(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get AI-powered career path recommendations for the current candidate."""
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+
+    if not candidate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidate profile not found"
+        )
+
+    # Get candidate data
+    candidate_dict = {
+        'skills': candidate.skills,
+        'experience_years': candidate.experience_years,
+        'education': candidate.education,
+        'work_experience': candidate.work_experience,
+        'profile_summary': candidate.profile_summary,
+    }
+
+    try:
+        career_path = ai_service.generate_career_path(candidate_dict)
+        return {
+            'career_path': career_path,
+            'learning_recommendations': [],  # Can be enhanced later
+            'next_roles': []  # Can be enhanced later
+        }
+    except Exception as e:
+        logger.error(f"Error generating career path: {e}")
+        return {
+            'career_path': "We could not generate career recommendations at this time. Please try again later.",
+            'learning_recommendations': [],
+            'next_roles': []
+        }
+
+
+@router.post("/me/interview-tips")
+def get_interview_tips(
+    job_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get interview preparation tips for a specific job."""
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+
+    if not candidate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidate profile not found"
+        )
+
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found"
+        )
+
+    try:
+        from ..services.gemini_service import get_gemini_service
+        gemini_service = get_gemini_service()
+        
+        work_exp = candidate.work_experience
+        if isinstance(work_exp, str):
+            try:
+                work_exp = json.loads(work_exp)
+            except:
+                work_exp = []
+        
+        exp_summary = "; ".join([str(e)[:50] for e in work_exp[:3]]) if isinstance(work_exp, list) else str(work_exp)[:100]
+        
+        tips = gemini_service.generate_interview_tips(
+            job_title=job.title,
+            job_description=job.description,
+            candidate_experience=exp_summary
+        )
+        
+        return {'interview_tips': tips}
+    except Exception as e:
+        logger.error(f"Error generating interview tips: {e}")
+        return {'interview_tips': 'Please research this role and prepare answers to common interview questions.'}
+
+
+@router.post("/me/cv-optimization")
+def get_cv_optimization_tips(
+    section: str,  # e.g., "summary", "skills", "experience"
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get AI suggestions to optimize a CV section."""
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+
+    if not candidate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidate profile not found"
+        )
+
+    try:
+        from ..services.gemini_service import get_gemini_service
+        gemini_service = get_gemini_service()
+        
+        section_text = ""
+        if section == "summary":
+            section_text = candidate.profile_summary or ""
+        elif section == "skills":
+            section_text = candidate.skills or ""
+        elif section == "experience":
+            section_text = candidate.work_experience or ""
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown section: {section}. Valid sections: summary, skills, experience"
+            )
+
+        if not section_text:
+            return {'optimized_text': "", 'message': f'No {section} found in your profile'}
+
+        optimized = gemini_service.optimize_cv_section(
+            section_name=section,
+            current_text=section_text
+        )
+        
+        return {'optimized_text': optimized}
+    except Exception as e:
+        logger.error(f"Error optimizing CV section: {e}")
+        return {'optimized_text': "", 'message': 'Could not optimize section at this time'}
+
+
+@router.post("/me/applications")
 def apply_for_job(
     application_data: ApplicationCreate,
     current_user: User = Depends(get_current_active_user),

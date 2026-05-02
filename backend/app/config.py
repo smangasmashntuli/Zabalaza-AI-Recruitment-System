@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     # Optional Services
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-1.5-flash"
 
     # Email
     SMTP_HOST: str = "smtp.gmail.com"
