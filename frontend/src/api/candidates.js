@@ -81,7 +81,26 @@ export const getProfileImprovementTips = async () => {
  * Chat with Gemini career advisor
  */
 export const chatWithGemini = async (message, history = null) => {
-  return post(`${API_ENDPOINTS.CANDIDATES}/me/chat`, { message, history });
+  try {
+    console.log('🔵 chatWithGemini called with:');
+    console.log('  - message:', message?.substring(0, 50) + (message?.length > 50 ? '...' : ''));
+    console.log('  - history items:', history?.length || 0);
+
+    const requestBody = { message, history };
+    console.log('📦 Request body:', JSON.stringify(requestBody).substring(0, 100) + '...');
+
+    const response = await post(`${API_ENDPOINTS.CANDIDATES}/me/chat`, requestBody);
+
+    console.log('✅ chatWithGemini got response:', response);
+    console.log('   response.response:', response?.response?.substring(0, 50));
+
+    return response;
+  } catch (error) {
+    console.error('❌ chatWithGemini error:', error);
+    console.error('   Error message:', error.message);
+    console.error('   Stack:', error.stack?.substring(0, 200));
+    throw error;
+  }
 };
 
 /**
