@@ -522,33 +522,64 @@ Be specific and practical.
     def chat(self, user_message: str, conversation_history: Optional[List[Dict]] = None) -> str:
         """Have a conversational chat with the LLM."""
         if not self.enabled:
-            return "Chat feature is not available at this time."
+            logger.warning("⚠️ Chat feature disabled: Gemini API not enabled")
+            return "Chat feature is not available at this time. Please ensure your API key is configured."
 
         try:
+            # Validate input
+            if not user_message or not user_message.strip():
+                return "Please enter a message to continue."
+
             # Build context from history
-            messages = []
+            context = ""
             if conversation_history:
-                context = "\n".join([
-                    f"User: {msg['user']}\nAssistant: {msg['assistant']}"
-                    for msg in conversation_history[-3:]  # Last 3 exchanges
-                ])
-            else:
-                context = ""
+                try:
+                    context = "\n".join([
+                        f"User: {msg.get('user', '')}\nAssistant: {msg.get('assistant', '')}"
+                        for msg in conversation_history[-3:] if msg.get('user') or msg.get('assistant')
+                    ])
+                except Exception as e:
+                    logger.warning(f"Could not build conversation context: {e}")
+                    context = ""
 
             full_prompt = f"""
 You are a helpful career advisor chatbot. Be friendly, conversational, and specific.
 Answer questions about job search, career development, resume building, and interview prep.
 
-{f'Previous conversation:{context}' if context else 'This is the start of the conversation.'}
+{f'Previous conversation:\n{context}' if context else 'This is the start of the conversation.'}
 
 User: {user_message}
 
 Provide a helpful, concise response (under 300 words).
 """
+            
+            logger.info(f"📤 Sending chat message to Gemini: '{user_message[:50]}...'")
             response = self.client.generate_content(full_prompt)
-            return response.text.strip()
+            
+            # CRITICAL: Check for empty/None response
+            if not response:
+                logger.error("❌ Gemini returned None response")
+                return "I couldn't generate a response. Please try again."
+            
+            # CRITICAL: Check for empty text
+            if not hasattr(response, 'text') or not response.text:
+                logger.error(f"❌ Gemini returned empty text: {response}")
+                return "I couldn't generate a response. Please try again."
+            
+            result = response.text.strip()
+            
+            # Even if we got text, it might be empty after strip()
+            if not result:
+                logger.error("❌ Gemini returned whitespace-only response")
+                return "I couldn't generate a response. Please try again."
+            
+            logger.info(f"📥 Gemini responded: '{result[:50]}...'")
+            return result
+            
         except Exception as e:
-            logger.error(f"❌ Error in chat: {e}")
+            logger.error(f"❌ Error in chat: {type(e).__name__}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return "I'm having trouble responding right now. Please try again."
 
 # Global Gemini service instance
