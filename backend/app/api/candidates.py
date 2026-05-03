@@ -737,12 +737,35 @@ def chat_with_gemini(
 ):
     """Chat with Gemini career advisor."""
     try:
+        logger.info(f"💬 Chat request from user {current_user.id}: '{request.message[:50]}'")
+        
         from ..services.gemini_service import get_gemini_service
         gemini = get_gemini_service()
         
+        # Verify Gemini is enabled
+        if not gemini.enabled:
+            logger.warning(f"⚠️ Gemini not enabled for user {current_user.id}")
+            return {
+                "response": "AI features are currently unavailable. Please check your Gemini API key configuration."
+            }
+        
+        # Call Gemini service
         response = gemini.chat(request.message, request.history)
+        
+        if not response or not response.strip():
+            logger.warning(f"⚠️ Empty response from Gemini for user {current_user.id}")
+            return {
+                "response": "I couldn't generate a response. Please try again."
+            }
+        
+        logger.info(f"✅ Chat response sent to user {current_user.id}")
         return {"response": response}
+        
     except Exception as e:
-        logger.error(f"Error in chat endpoint: {e}")
-        return {"response": "I encountered an error. Please try again."}
+        logger.error(f"❌ Error in chat endpoint: {type(e).__name__}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return {
+            "response": "An error occurred while processing your message. Please try again."
+        }
 
