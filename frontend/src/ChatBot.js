@@ -37,12 +37,53 @@ const ChatBot = () => {
         assistant: msg.type === 'bot' ? msg.text : ''
       })).filter(item => item.user || item.assistant);
 
+      console.log('📤 Sending chat message:', userMessage);
+      console.log('📊 History items:', recentHistory.length);
+      
       const response = await chatWithGemini(userMessage, recentHistory);
-      const botMessage = response?.response || 'Sorry, I couldn\'t process that. Try again.';
+      
+      console.log('📥 API Response:', response);
+      
+      // CRITICAL: Check response format
+      if (!response) {
+        console.error('❌ API returned null/undefined response');
+        setMessages(prev => [...prev, { type: 'bot', text: 'No response received from server. Please try again.' }]);
+        setIsLoading(false);
+        return;
+      }
+      
+      // Extract the actual message text
+      let botMessage = response?.response;
+      
+      // If response is a string directly (shouldn't happen but handle it)
+      if (typeof response === 'string') {
+        botMessage = response;
+      }
+      
+      if (!botMessage || !botMessage.trim()) {
+        console.warn('⚠️ Received empty bot message:', botMessage);
+        botMessage = 'I received an empty response. Please try again.';
+      }
+      
+      console.log('✅ Bot message extracted:', botMessage.substring(0, 50) + '...');
       setMessages(prev => [...prev, { type: 'bot', text: botMessage }]);
     } catch (error) {
-      console.error('Chat error:', error);
-      setMessages(prev => [...prev, { type: 'bot', text: 'I encountered an error. Please try again later.' }]);
+      console.error('❌ Chat error:', error);
+      
+      let errorMessage = 'I encountered an error. Please try again later.';
+      
+      // Check for specific error types
+      if (error.message.includes('401')) {
+        errorMessage = 'Your session has expired. Please log in again.';
+      } else if (error.message.includes('404')) {
+        errorMessage = 'Chat service is not available. Please check your connection.';
+      } else if (error.message.includes('500')) {
+        errorMessage = 'Server error occurred. Please try again in a moment.';
+      } else if (error.message.includes('Network')) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      }
+      
+      setMessages(prev => [...prev, { type: 'bot', text: errorMessage }]);
     } finally {
       setIsLoading(false);
     }
