@@ -8,6 +8,11 @@ An AI-assisted recruitment platform with a FastAPI backend and React frontend th
 - recommends matching jobs from the local database and external job sources,
 - and keeps the UI readable and user-friendly.
 
+## System Architecture
+
+<img width="529" height="569" alt="arch drawio" src="https://github.com/user-attachments/assets/decfd96e-c7bc-4ddd-ae1b-973f82c6d93e" />
+
+
 ## Current Highlights
 
 - **Resume upload and parsing** for PDF, DOC, and DOCX files
