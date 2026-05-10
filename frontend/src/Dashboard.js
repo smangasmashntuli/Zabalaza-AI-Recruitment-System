@@ -200,9 +200,9 @@ function Dashboard({ onLogout }) {
 
   // Fallback data if no data loaded
   const displayUserProfile = userProfile || {
-    name: 'User',
-    title: 'Profile incomplete',
-    avatar: 'U',
+    name: '',
+    title: '',
+    avatar: '',
     profileComplete: 0
   };
 
@@ -268,22 +268,55 @@ function Dashboard({ onLogout }) {
     new Set(recommendations.map((job) => job.company).filter(Boolean))
   ).slice(0, 4);
 
-  const careerPaths = [
-    {
-      title: candidateProfile?.title || 'Current Profile',
-      next: topRecommendations[0]?.position || 'Senior Specialist',
-      description: 'Best next-step role based on your strongest current match.',
-    },
-    {
-      title: topRecommendations[0]?.position || 'Growth Role',
-      next: topRecommendations[1]?.position || 'Leadership Track',
-      description: 'A second role to consider as your profile expands.',
-    },
-  ];
-
   const learningRecommendations = careerPathSkills.length > 0
     ? careerPathSkills.slice(0, 4)
     : [...new Set(nearMatches.flatMap((job) => job.missingSkills || []))].slice(0, 4);
+
+  const currentCareerTitle = (candidateProfile?.title || userProfile?.title || '').trim();
+
+  const dynamicCareerPaths = (() => {
+    const paths = [];
+    const nextRoles = Array.isArray(careerPathNextRoles) ? careerPathNextRoles.filter(Boolean) : [];
+
+    if (nextRoles.length > 0) {
+      nextRoles.slice(0, 3).forEach((role, index) => {
+        const sourceRole = index === 0
+          ? (currentCareerTitle || topRecommendations[0]?.position || '')
+          : (nextRoles[index - 1] || currentCareerTitle || '');
+        const relatedJob = topRecommendations[index] || topRecommendations[0] || null;
+        const focusText = learningRecommendations.length > 0
+          ? `Focus areas: ${learningRecommendations.slice(0, 3).join(', ')}`
+          : '';
+
+        paths.push({
+          current: sourceRole,
+          next: role,
+          description: [careerPath, relatedJob?.matchExplanation, focusText].filter(Boolean).join(' • '),
+        });
+      });
+
+      return paths.filter((item) => item.current || item.next || item.description);
+    }
+
+    if (topRecommendations.length > 0) {
+      topRecommendations.slice(0, 2).forEach((job, index) => {
+        const sourceRole = index === 0
+          ? (currentCareerTitle || '')
+          : (topRecommendations[index - 1]?.position || currentCareerTitle || '');
+        const skillGapText = (job.skillGaps || []).slice(0, 3).join(', ');
+
+        paths.push({
+          current: sourceRole,
+          next: job.position || '',
+          description: job.matchExplanation || (skillGapText ? `Skills to build: ${skillGapText}` : `Match score: ${job.match}%`),
+        });
+      });
+
+      return paths.filter((item) => item.current || item.next || item.description);
+    }
+
+    return [];
+  })();
 
   const discoverTips = [
     !candidateProfile?.resume_text && 'Upload your resume to unlock deeper AI matching.',
@@ -458,14 +491,21 @@ function Dashboard({ onLogout }) {
             <span>AI-suggested role progression</span>
           </div>
           <div className="discover-paths">
-            {careerPaths.map((path, index) => (
-              <div key={`${path.title}-${index}`} className="discover-path-card">
-                <span className="discover-path-current">{path.title}</span>
-                <Icon name="arrow" size={16} />
-                <span className="discover-path-next">{path.next}</span>
-                <p>{path.description}</p>
+            {dynamicCareerPaths.length === 0 ? (
+              <div className="discover-empty-card compact">
+                <Icon name="sparkles" size={24} />
+                <p>Upload your CV and complete your profile to generate live role progression from the model.</p>
               </div>
-            ))}
+            ) : (
+              dynamicCareerPaths.map((path, index) => (
+                <div key={`${path.current || 'current'}-${path.next || 'next'}-${index}`} className="discover-path-card">
+                  <span className="discover-path-current">{path.current}</span>
+                  <Icon name="arrow" size={16} />
+                  <span className="discover-path-next">{path.next}</span>
+                  {path.description && <p>{path.description}</p>}
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -634,10 +674,12 @@ function Dashboard({ onLogout }) {
               )}
             </div>
             <div className="user-profile-header" onClick={() => setShowProfile(true)}>
-              <div className="user-avatar-small">{displayUserProfile.avatar}</div>
+              <div className="user-avatar-small">
+                {displayUserProfile.avatar || <Icon name="user" size={18} />}
+              </div>
               <div className="user-info-small">
-                <span className="user-name-small">{displayUserProfile.name}</span>
-                <span className="user-title-small">{displayUserProfile.title}</span>
+                {displayUserProfile.name && <span className="user-name-small">{displayUserProfile.name}</span>}
+                {displayUserProfile.title && <span className="user-title-small">{displayUserProfile.title}</span>}
               </div>
             </div>
             <button
