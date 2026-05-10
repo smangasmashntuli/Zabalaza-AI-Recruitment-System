@@ -153,3 +153,4 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: Optional[List[Dict[str, str]]] = None
+    context: Optional[str] = None  # Optional context for specialized analysis (e.g., match details query)
