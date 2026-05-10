@@ -1,6 +1,8 @@
 from typing import Dict, List, Optional
+import json
 from .resume_parser import ResumeParser
 from .matching_engine import MatchingEngine
+from .gemini_service import get_gemini_service
 
 
 class AIService:
@@ -9,10 +11,87 @@ class AIService:
     def __init__(self):
         self.resume_parser = ResumeParser()
         self.matching_engine = MatchingEngine()
+        # Lazy initialize Gemini service for LLM refinement and enhancements
+        try:
+            self.gemini_service = get_gemini_service()
+        except Exception:
+            self.gemini_service = None
 
     def parse_resume(self, file_content: bytes, file_type: str) -> Dict:
         """Parse resume using AI."""
-        return self.resume_parser.parse(file_content, file_type)
+        # Keep the fast rule-based parser as baseline
+        parsed = self.resume_parser.parse(file_content, file_type)
+        if not parsed or not parsed.get("success"):
+            return parsed
+
+        # Attempt LLM post-processing to recover missed fields
+        try:
+            llm_data = self.llm_refine(parsed.get("resume_text", ""))
+        except Exception:
+            llm_data = {}
+
+        # Merge skills intelligently (union, preserve order)
+        parsed_skills = parsed.get("skills", []) or []
+        llm_skills = llm_data.get("skills", []) or []
+        merged = []
+        for s in parsed_skills + llm_skills:
+            if not s:
+                continue
+            if s not in merged:
+                merged.append(s)
+        parsed["skills"] = merged
+
+        # Prefer LLM-provided structured education/work if available
+        parsed["education"] = llm_data.get("education") or parsed.get("education")
+        parsed["work_experience"] = llm_data.get("work_experience") or parsed.get("work_experience")
+
+        return parsed
+
+    def llm_refine(self, resume_text: str) -> Dict:
+        """
+        Use the Gemini LLM to refine and extract structured resume data.
+
+        Returns JSON with keys: skills (list), education (list of objects), work_experience (list of objects)
+        """
+        result = {}
+        if not resume_text or not self.gemini_service or not getattr(self.gemini_service, "enabled", False):
+            return result
+
+        try:
+            prompt = f"""
+Extract structured data from this resume. Return only valid JSON.
+
+Required keys:
+- skills: list of strings
+- education: list of objects with keys (degree, school, field, startDate, endDate)
+- work_experience: list of objects with keys (title, company, startDate, endDate, description)
+
+Resume:\n{resume_text}
+
+Return JSON only (no markdown).
+"""
+            response = self.gemini_service.client.generate_content(prompt)
+            if not response or not hasattr(response, 'text'):
+                return {}
+            text = response.text.strip()
+
+            # Try direct JSON parsing, otherwise extract JSON block
+            try:
+                parsed = json.loads(text)
+                return parsed
+            except Exception:
+                # try to extract first JSON object from text
+                start = text.find('{')
+                end = text.rfind('}')
+                if start != -1 and end != -1 and end > start:
+                    try:
+                        parsed = json.loads(text[start:end+1])
+                        return parsed
+                    except Exception:
+                        return {}
+                return {}
+        except Exception:
+            return {}
 
     def generate_candidate_embedding(self, candidate_data: Dict) -> List[float]:
         """Generate embedding for candidate profile."""
@@ -90,7 +169,7 @@ class AIService:
         heuristic_summary = ". ".join(summary_parts) + "." if summary_parts else "Professional seeking opportunities."
 
         # Try to enhance with Gemini if available
-        if self.gemini_service.enabled and skills:
+        if getattr(self.gemini_service, "enabled", False) and skills:
             try:
                 work_exp = candidate_data.get('work_experience', [])
                 work_summary = "; ".join([str(e)[:50] for e in work_exp[:2]]) if isinstance(work_exp, list) else str(work_exp)[:100]
