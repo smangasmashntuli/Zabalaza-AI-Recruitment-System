@@ -111,7 +111,7 @@ Be encouraging but honest. Never mention the match score percentage.
                 job_title, match_score, candidate_skills, job_requirements
             )
         except Exception as e:
-            logger.error(f"❌ Error generating match explanation: {e}")
+            logger.error(f"Error generating match explanation: {e}")
             return self._fallback_match_explanation(
                 job_title, match_score, candidate_skills, job_requirements
             )
@@ -123,7 +123,6 @@ Be encouraging but honest. Never mention the match score percentage.
         candidate_skills: List[str],
         job_requirements: List[str]
     ) -> str:
-        """Fallback explanation if Gemini is unavailable."""
         if not candidate_skills or not job_requirements:
             return f"{job_title} matches your profile."
 
@@ -519,8 +518,8 @@ Be specific and practical.
             logger.error(f"❌ Error getting profile improvement tips: {e}")
             return "Could not generate tips at this time."
 
-    def chat(self, user_message: str, conversation_history: Optional[List[Dict]] = None) -> str:
-        """Have a conversational chat with the LLM."""
+    def chat(self, user_message: str, conversation_history: Optional[List[Dict]] = None, context: Optional[str] = None) -> str:
+        """Have a conversational chat with the LLM using recruitment system instructions."""
         if not self.enabled:
             logger.warning("⚠️ Chat feature disabled: Gemini API not enabled")
             return "Chat feature is not available at this time. Please ensure your API key is configured."
@@ -530,28 +529,60 @@ Be specific and practical.
             if not user_message or not user_message.strip():
                 return "Please enter a message to continue."
 
+            # RECRUITMENT SYSTEM INSTRUCTION
+            system_instruction = """You are CareerMate, an expert AI Career Advisor helping candidates succeed in recruitment.
+
+🎯 YOUR CORE ROLE:
+Help candidates with accurate, honest, and actionable career insights.
+
+KEY PRINCIPLES:
+✓ ALWAYS be honest - never exaggerate or lie
+✓ ALWAYS provide specific, actionable advice
+✓ ALWAYS highlight both strengths AND gaps
+✓ ALWAYS suggest concrete next steps
+✓ ALWAYS base advice on the data you're given
+
+🚫 STRICT RULES:
+✗ Do NOT fabricate match scores or qualifications
+✗ Do NOT ignore provided information
+✗ Do NOT give false encouragement
+✗ Do NOT provide legal/medical/financial advice
+✓ DO celebrate genuine strengths
+✓ DO suggest learning paths to close gaps
+✓ DO acknowledge uncertainty when appropriate
+
+📝 RESPONSE STYLE:
+- Concise but comprehensive (2-4 paragraphs)
+- Use bullet points for clarity
+- Be warm and encouraging while staying honest
+- Always include actionable next steps
+
+CURRENT TIME: {datetime.utcnow().strftime('%Y-%m-%d')}"""
+
             # Build context from history
-            context = ""
+            conversation_context = ""
             if conversation_history:
                 try:
-                    context = "\n".join([
+                    conversation_context = "\n".join([
                         f"User: {msg.get('user', '')}\nAssistant: {msg.get('assistant', '')}"
                         for msg in conversation_history[-3:] if msg.get('user') or msg.get('assistant')
                     ])
                 except Exception as e:
                     logger.warning(f"Could not build conversation context: {e}")
-                    context = ""
+                    conversation_context = ""
 
-            full_prompt = f"""
-You are a helpful career advisor chatbot. Be friendly, conversational, and specific.
-Answer questions about job search, career development, resume building, and interview prep.
+            # Build full prompt with optional additional context
+            context_section = f"\nContext: {context}" if context else ""
 
-{f'Previous conversation:\n{context}' if context else 'This is the start of the conversation.'}
+            full_prompt = f"""{system_instruction}
+
+{context_section}
+
+{f'Previous conversation:\n{conversation_context}' if conversation_context else 'This is the start of the conversation.'}
 
 User: {user_message}
 
-Provide a helpful, concise response (under 300 words).
-"""
+Provide a helpful, honest, and actionable response."""
             
             logger.info(f"📤 Sending chat message to Gemini: '{user_message[:50]}...'")
             response = self.client.generate_content(full_prompt)
