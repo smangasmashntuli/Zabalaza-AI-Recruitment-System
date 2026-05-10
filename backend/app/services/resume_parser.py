@@ -3,6 +3,12 @@ from io import BytesIO
 from typing import Dict, List, Optional, Tuple
 
 import PyPDF2
+try:
+    import pdfplumber
+    PDFPLUMBER_AVAILABLE = True
+except Exception:
+    pdfplumber = None
+    PDFPLUMBER_AVAILABLE = False
 import docx
 
 
@@ -44,10 +50,16 @@ class ResumeParser:
         ]
 
     def extract_text_from_pdf(self, file_content: bytes) -> str:
+        # Prefer pdfplumber for more robust extraction, fall back to PyPDF2
         try:
-            pdf_reader = PyPDF2.PdfReader(BytesIO(file_content))
-            return "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
+            if PDFPLUMBER_AVAILABLE:
+                with pdfplumber.open(BytesIO(file_content)) as pdf:
+                    return "\n".join((page.extract_text() or "") for page in pdf.pages)
+            else:
+                pdf_reader = PyPDF2.PdfReader(BytesIO(file_content))
+                return "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
         except Exception as exc:
+            # Keep extraction resilient: return empty string on failure
             print(f"Error extracting PDF text: {exc}")
             return ""
 
@@ -79,7 +91,8 @@ class ResumeParser:
 
         for idx, line in enumerate(lines):
             normalized = line.lower().strip(":").strip()
-            if normalized in headers:
+            # More flexible header detection: check if any header token is present
+            if any(h in normalized for h in headers):
                 start_idx = idx + 1
                 break
 
@@ -89,7 +102,8 @@ class ResumeParser:
         collected = []
         for line in lines[start_idx:]:
             normalized = line.lower().strip(":").strip()
-            if any(normalized in values for values in self.section_headers.values()):
+            # If we encounter another section header, stop collecting
+            if any(any(h in normalized for h in values) for values in self.section_headers.values()):
                 break
             collected.append(line)
 
@@ -139,8 +153,26 @@ class ResumeParser:
 
     def extract_skills(self, text: str) -> List[str]:
         text_lower = text.lower()
-        found_skills = {skill.title() for skill in self.skill_keywords if skill in text_lower}
-        return sorted(found_skills)
+        # Normalize text to remove punctuation to catch variants like 'react.js', 'reactjs', 'nodejs'
+        import re
+        text_norm = re.sub(r"[\W_]+", " ", text_lower)
+        tokens = set(text_norm.split())
+
+        found = set()
+        for skill in self.skill_keywords:
+            s = skill.lower()
+            variants = {
+                s,
+                s.replace(" ", ""),
+                s.replace(".", ""),
+                s.replace(".", "").replace(" ", ""),
+            }
+            # also check token-level membership for multi-word skills
+            if any(v in text_lower or v in text_norm or v in tokens for v in variants):
+                # Preserve human-friendly casing
+                found.add(skill.title())
+
+        return sorted(found)
 
     def extract_experience_years(self, text: str) -> float:
         patterns = [
@@ -193,21 +225,50 @@ class ResumeParser:
             if len(experience) >= 5:
                 break
 
-            match = self.date_range_pattern.search(line)
-            if not match:
+            # Build a small block of lines to search for dates and context (handles bullet lists)
+            block = " ".join(lines[idx: idx + 4])
+            match = self.date_range_pattern.search(block)
+
+            # Also accept job entries that have a job-title keyword even if no date is found
+            has_title_keyword = any(kw in line.lower() for kw in self.job_title_keywords)
+            if not match and not has_title_keyword:
                 continue
 
-            previous_line = lines[idx - 1] if idx > 0 else ""
-            next_line = lines[idx + 1] if idx + 1 < len(lines) and not self.date_range_pattern.search(lines[idx + 1]) else ""
+            # Determine title: prefer a nearby line with a job-title keyword
+            title = next((l for l in lines[idx: idx + 3] if any(kw in l.lower() for kw in self.job_title_keywords)), line)
+            # Determine company: look at lines near the title for 'at' or a capitalized company-like token
+            company = ""
+            for l in lines[idx: idx + 4]:
+                low = l.lower()
+                if " at " in low or "company" in low or ("," in l and len(l.split()) > 1 and any(ch.isupper() for ch in l[:3])):
+                    company = l
+                    break
+
+            # Extract dates from block if present
+            start_date = ""
+            end_date = ""
+            current = False
+            if match:
+                start_date = match.group(1)
+                end_date = match.group(2) or ""
+                current = (end_date or "").lower() in {"present", "current"}
+            else:
+                # try to find any 4-digit year in the block
+                years = re.findall(r"(?:19|20)\d{2}", block)
+                if years:
+                    start_date = years[0]
+                    end_date = years[-1] if len(years) > 1 else ""
+
+            description = block[:300]
 
             experience.append({
-                "title": (previous_line or line)[:120] or "Not specified",
-                "company": next_line[:120] or "Not specified",
+                "title": (title or line)[:120] or "Not specified",
+                "company": (company or "Not specified")[:120],
                 "location": None,
-                "startDate": match.group(1),
-                "endDate": match.group(2) or "",
-                "current": (match.group(2) or "").lower() in {"present", "current"},
-                "description": line[:300],
+                "startDate": start_date,
+                "endDate": end_date,
+                "current": current,
+                "description": description,
             })
 
         return experience
