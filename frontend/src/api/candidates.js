@@ -79,15 +79,21 @@ export const getProfileImprovementTips = async () => {
 
 /**
  * Chat with Gemini career advisor
+ * @param {string} message - User message
+ * @param {Array} history - Conversation history
+ * @param {string} context - Optional context query for specialized analysis
  */
-export const chatWithGemini = async (message, history = null) => {
+export const chatWithGemini = async (message, history = null, context = null) => {
   try {
     console.log('🔵 chatWithGemini called with:');
     console.log('  - message:', message?.substring(0, 50) + (message?.length > 50 ? '...' : ''));
     console.log('  - history items:', history?.length || 0);
+    if (context) {
+      console.log('  - context:', context?.substring(0, 50) + (context?.length > 50 ? '...' : ''));
+    }
 
-    const requestBody = { message, history };
-    console.log('📦 Request body:', JSON.stringify(requestBody).substring(0, 100) + '...');
+    const requestBody = { message, history, context };
+    console.log('📦 Request body keys:', Object.keys(requestBody));
 
     const response = await post(`${API_ENDPOINTS.CANDIDATES}/me/chat`, requestBody);
 
@@ -99,6 +105,22 @@ export const chatWithGemini = async (message, history = null) => {
     console.error('❌ chatWithGemini error:', error);
     console.error('   Error message:', error.message);
     console.error('   Stack:', error.stack?.substring(0, 200));
+    throw error;
+  }
+};
+
+/**
+ * Get orchestrated context for a button click (Match Details, Interview Tips, etc.)
+ */
+export const getButtonContext = async (buttonType, jobId) => {
+  try {
+    const response = await post(`${API_ENDPOINTS.CANDIDATES}/me/button-context`, {
+      button_type: buttonType,
+      job_id: jobId
+    });
+    return response;
+  } catch (error) {
+    console.error('❌ getButtonContext error:', error);
     throw error;
   }
 };

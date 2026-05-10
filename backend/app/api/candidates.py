@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 import json
 import logging
 from ..core.dependencies import get_db, get_current_active_user
@@ -749,9 +749,9 @@ def chat_with_gemini(
                 "response": "AI features are currently unavailable. Please check your Gemini API key configuration."
             }
         
-        # Call Gemini service
-        response = gemini.chat(request.message, request.history)
-        
+        # Call Gemini service with optional context
+        response = gemini.chat(request.message, request.history, context=getattr(request, 'context', None))
+
         if not response or not response.strip():
             logger.warning(f"⚠️ Empty response from Gemini for user {current_user.id}")
             return {
@@ -769,3 +769,106 @@ def chat_with_gemini(
             "response": "An error occurred while processing your message. Please try again."
         }
 
+
+@router.post("/me/button-context")
+def get_button_context(
+    button_request: Dict[str, Any],
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get orchestrated context for a button click in JobPortal.
+    
+    Combines ML model insights + Gemini LLM for intelligent analysis.
+    Used when user clicks: Match Details, Interview Tips, Tailor Resume, Help Stand Out
+    """
+    try:
+        button_type = button_request.get('button_type', 'match_details')
+        job_id = button_request.get('job_id')
+        
+        if not job_id:
+            raise HTTPException(status_code=400, detail="job_id is required")
+        
+        # Get candidate and job
+        candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+        if not candidate:
+            raise HTTPException(status_code=404, detail="Candidate profile not found")
+        
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        # Get orchestrator
+        from ..services.orchestrator_service import get_orchestrator
+        orchestrator = get_orchestrator(ai_service)
+        
+        # Prepare candidate data
+        candidate_data = {
+            "id": candidate.id,
+            "title": candidate.title or "",
+            "skills": [],
+            "experience_years": candidate.experience_years or 0,
+            "education": candidate.education or "",
+            "years_of_experience": candidate.experience_years or 0,
+        }
+        
+        # Parse skills
+        try:
+            skills_json = json.loads(candidate.skills) if candidate.skills else []
+            candidate_data["skills"] = skills_json if isinstance(skills_json, list) else []
+        except:
+            candidate_data["skills"] = []
+        
+        # Prepare job data
+        job_data = {
+            "id": job.id,
+            "job_id": job.id,
+            "title": job.title,
+            "description": job.description or "",
+            "requirements": [],
+            "company": getattr(job, 'company', 'Unknown Company')
+        }
+        
+        # Parse requirements
+        try:
+            reqs_json = json.loads(job.requirements) if job.requirements else []
+            job_data["requirements"] = reqs_json if isinstance(reqs_json, list) else []
+        except:
+            job_data["requirements"] = []
+        
+        # Get ML insights if available
+        ml_insights = {}
+        if candidate.embedding and job.embedding:
+            try:
+                candidate_emb = json.loads(candidate.embedding)
+                job_emb = json.loads(job.embedding)
+                from ..services.matching_engine import MatchingEngine
+                engine = MatchingEngine()
+                match_score = engine.calculate_similarity(candidate_emb, job_emb)
+                ml_insights['match_score'] = match_score
+            except:
+                ml_insights['match_score'] = 0.0
+        
+        # Get orchestrated context
+        context = orchestrator.analyze_button_context(
+            button_type=button_type,
+            job_data=job_data,
+            candidate_data=candidate_data,
+            ml_insights=ml_insights
+        )
+        
+        logger.info(f"✅ Button context generated for {button_type} on job {job_id}")
+        return context
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error generating button context: {type(e).__name__}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return {
+            "button_type": "error",
+            "context": "Unable to generate context. Please try again.",
+            "query": "",
+            "error": str(e)
+        }
