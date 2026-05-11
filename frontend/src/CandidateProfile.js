@@ -27,24 +27,83 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
       setLoading(true);
       setError(null);
       const data = await getCandidateProfile();
+      // The backend may store parsed resume results under several keys depending on pipeline.
+      const parsed = data.parsed_resume || data.resume_parsed || data.parsed || data.resume_extracted || {};
 
-      // Transform backend data to match component structure
+      const normalizeDate = (v) => {
+        if (!v) return null;
+        const d = new Date(v);
+        return isNaN(d.getTime()) ? null : d.toISOString();
+      };
+
+      const normalizeExperience = (list = []) => {
+        const mapped = (list || []).map((e, idx) => ({
+          id: e.id || e.uuid || idx,
+          title: e.title || e.position || e.job_title || e.role || '',
+          company: e.company || e.employer || '',
+          location: e.location || e.city || '',
+          startDate: normalizeDate(e.start_date || e.startDate || e.from || e.from_date),
+          endDate: normalizeDate(e.end_date || e.endDate || e.to || e.to_date),
+          current: !!(e.current || e.is_current || e.currently_working || false),
+          description: e.description || e.summary || e.responsibilities || '',
+        }));
+
+        mapped.sort((a, b) => {
+          const aTime = a.startDate ? Date.parse(a.startDate) : (a.endDate ? Date.parse(a.endDate) : 0);
+          const bTime = b.startDate ? Date.parse(b.startDate) : (b.endDate ? Date.parse(b.endDate) : 0);
+          return (bTime || 0) - (aTime || 0);
+        });
+
+        return mapped;
+      };
+
+      const normalizeEducation = (list = []) => {
+        const mapped = (list || []).map((e, idx) => ({
+          id: e.id || e.uuid || idx,
+          degree: e.degree || e.title || e.qualification || '',
+          field: e.field || e.major || e.area || '',
+          school: e.school || e.institution || e.university || '',
+          startDate: normalizeDate(e.start_date || e.startDate || e.from),
+          endDate: normalizeDate(e.end_date || e.endDate || e.to),
+          current: !!(e.current || e.is_current || false),
+        }));
+
+        mapped.sort((a, b) => {
+          const aTime = a.endDate ? Date.parse(a.endDate) : (a.startDate ? Date.parse(a.startDate) : 0);
+          const bTime = b.endDate ? Date.parse(b.endDate) : (b.startDate ? Date.parse(b.startDate) : 0);
+          return (bTime || 0) - (aTime || 0);
+        });
+
+        return mapped;
+      };
+
+      const normalizeSkills = (list = []) => {
+        const items = (list || []).map(s => (s || '').toString().trim());
+        return Array.from(new Set(items.filter(Boolean)));
+      };
+
+      // Prefer parsed resume structured output when available, otherwise fall back to profile lists
+      const experienceSource = parsed.work_experience || parsed.experience || data.work_experience_list || data.experience || [];
+      const educationSource = parsed.education || data.education_list || data.education || [];
+      const skillsSource = parsed.skills || data.skills_list || data.skills || [];
+
       const transformedProfile = {
-        firstName: data.first_name || '',
-        lastName: data.last_name || '',
-        email: data.email || '',
-        phone: data.phone || '',
-        location: data.location || '',
-        title: data.title || '',
-        bio: data.bio || '',
-        website: data.website || '',
-        linkedin: data.linkedin || '',
-        github: data.github || '',
-        experience: data.work_experience_list || [],
-        education: data.education_list || [],
-        skills: data.skills_list || [],
-        certifications: data.certifications || [],
-        resumePath: data.resume_path || null,
+        firstName: data.first_name || data.firstName || parsed.first_name || parsed.firstName || '',
+        lastName: data.last_name || data.lastName || parsed.last_name || parsed.lastName || '',
+        email: data.email || parsed.email || '',
+        phone: data.phone || parsed.phone || '',
+        location: data.location || parsed.location || '',
+        title: data.title || parsed.title || parsed.target_role || '',
+        bio: data.bio || parsed.summary || parsed.profile || '',
+        website: data.website || parsed.website || '',
+        linkedin: data.linkedin || parsed.linkedin || '',
+        github: data.github || parsed.github || '',
+        experience: normalizeExperience(experienceSource),
+        education: normalizeEducation(educationSource),
+        skills: normalizeSkills(skillsSource),
+        certifications: data.certifications || parsed.certifications || [],
+        resumePath: data.resume_path || data.resumePath || null,
+        resumeText: data.resume_text || parsed.resume_text || parsed.text || '',
       };
 
       setProfile(transformedProfile);
@@ -168,6 +227,35 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
       setSaving(false);
       event.target.value = '';
     }
+  };
+
+  const handleAddExperience = () => {
+    const newExp = {
+      id: `new-${Date.now()}`,
+      title: '',
+      company: '',
+      location: '',
+      startDate: null,
+      endDate: null,
+      current: false,
+      description: '',
+    };
+    setProfile({ ...profile, experience: [newExp, ...(profile.experience || [])] });
+    setIsEditing(true);
+  };
+
+  const handleAddEducation = () => {
+    const newEdu = {
+      id: `new-${Date.now()}`,
+      degree: '',
+      field: '',
+      school: '',
+      startDate: null,
+      endDate: null,
+      current: false,
+    };
+    setProfile({ ...profile, education: [newEdu, ...(profile.education || [])] });
+    setIsEditing(true);
   };
 
   const handleOptimizeCvSection = async (section) => {
@@ -554,7 +642,7 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
                     <h3 className="profile-card-title">Work Experience</h3>
                   </div>
                   {isEditing && (
-                    <button className="add-button">
+                    <button className="add-button" onClick={handleAddExperience}>
                       <Icon name="plus" size={18} />
                       Add Experience
                     </button>
@@ -604,7 +692,7 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
                     <h3 className="profile-card-title">Education</h3>
                   </div>
                   {isEditing && (
-                    <button className="add-button">
+                    <button className="add-button" onClick={handleAddEducation}>
                       <Icon name="plus" size={18} />
                       Add Education
                     </button>
