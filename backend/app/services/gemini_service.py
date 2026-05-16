@@ -19,6 +19,13 @@ import logging
 from typing import Dict, List, Optional
 from datetime import datetime
 
+# Optional local text-generation support via Hugging Face transformers
+try:
+    from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
+    TRANSFORMERS_AVAILABLE = True
+except Exception:
+    TRANSFORMERS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -617,6 +624,50 @@ Provide a helpful, honest, and actionable response."""
 def create_gemini_service() -> GeminiService:
     """Factory function to create Gemini service with settings."""
     from ..config import settings
+    # If a local LLM is requested in settings and transformers is available,
+    # attempt to use it as a local text-generation fallback.
+    local_model = getattr(settings, 'LOCAL_LLM_MODEL', '')
+    use_local = getattr(settings, 'USE_LOCAL_LLM', False)
+
+    if use_local and local_model and TRANSFORMERS_AVAILABLE:
+        logger.info(f"🔁 Using local LLM model: {local_model}")
+
+        class LocalTextGenClient:
+            """Minimal adapter to expose .generate_content(prompt) -> object with .text"""
+            def __init__(self, model_name: str):
+                try:
+                    # Use causal LM pipeline
+                    self.pipe = pipeline('text-generation', model=model_name, device=-1)
+                except Exception as e:
+                    logger.error(f"Failed to load local model {model_name}: {e}")
+                    raise
+
+            def generate_content(self, prompt: str, **kwargs):
+                # Use small generation defaults; caller expects an object with .text
+                try:
+                    out = self.pipe(prompt, max_length=512, do_sample=True, top_p=0.95, temperature=0.7)
+                    text = out[0].get('generated_text') if isinstance(out, list) and out else str(out)
+                except Exception as e:
+                    logger.error(f"Local model generation failed: {e}")
+                    text = ""
+
+                class Res:
+                    def __init__(self, text):
+                        self.text = text
+
+                return Res(text)
+
+        # Create a GeminiService instance but swap its client with local client
+        svc = GeminiService(api_key=None, model=settings.GEMINI_MODEL)
+        try:
+            svc.client = LocalTextGenClient(local_model)
+            svc.enabled = True
+            logger.info("✅ Local LLM client initialized and will be used for LLM tasks.")
+            return svc
+        except Exception:
+            logger.error("⚠️ Falling back to remote Gemini service due to local model load failure.")
+
+    # Default: use GeminiService configured for remote Gemini
     return GeminiService(
         api_key=settings.GEMINI_API_KEY,
         model=settings.GEMINI_MODEL
