@@ -26,6 +26,14 @@ class Settings(BaseSettings):
     # AI/ML
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
     SIMILARITY_THRESHOLD: float = 0.6
+    # Local LLM configuration (optional). If USE_LOCAL_LLM is true and LOCAL_LLM_MODEL
+    # is set, the server will attempt to use a local HF-compatible text-generation
+    # model (e.g. 'gpt2', 'tiiuae/falcon-micro' or any CPU/GPU model you have) as a
+    # fallback to Gemini. Note: MiniLM is normally an embedding model (MiniLM-L6)
+    # and not a text generation model. Use an appropriate local generator if you
+    # want full chat capabilities.
+    USE_LOCAL_LLM: bool = False
+    LOCAL_LLM_MODEL: str = ""
 
     # External Job APIs - RapidAPI
     RAPIDAPI_KEY: str = ""
