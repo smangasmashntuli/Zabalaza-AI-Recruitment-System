@@ -17,33 +17,40 @@ class AIService:
         except Exception:
             self.gemini_service = None
 
-    def parse_resume(self, file_content: bytes, file_type: str) -> Dict:
-        """Parse resume using AI."""
-        # Keep the fast rule-based parser as baseline
+    def parse_resume(self, file_content: bytes, file_type: str, fast_mode: bool = True) -> Dict:
+        """Parse resume and optionally refine with LLM.
+
+        fast_mode=True keeps upload latency low for profile auto-fill.
+        """
         parsed = self.resume_parser.parse(file_content, file_type)
         if not parsed or not parsed.get("success"):
             return parsed
 
-        # Attempt LLM post-processing to recover missed fields
+        if fast_mode:
+            return parsed
+
         try:
             llm_data = self.llm_refine(parsed.get("resume_text", ""))
         except Exception:
             llm_data = {}
 
-        # Merge skills intelligently (union, preserve order)
         parsed_skills = parsed.get("skills", []) or []
         llm_skills = llm_data.get("skills", []) or []
         merged = []
-        for s in parsed_skills + llm_skills:
-            if not s:
+        for skill in parsed_skills + llm_skills:
+            if not skill:
                 continue
-            if s not in merged:
-                merged.append(s)
+            if skill not in merged:
+                merged.append(skill)
         parsed["skills"] = merged
 
-        # Prefer LLM-provided structured education/work if available
         parsed["education"] = llm_data.get("education") or parsed.get("education")
         parsed["work_experience"] = llm_data.get("work_experience") or parsed.get("work_experience")
+
+        if llm_data.get("projects"):
+            parsed["projects"] = llm_data.get("projects")
+        if llm_data.get("languages"):
+            parsed["languages"] = llm_data.get("languages")
 
         return parsed
 
@@ -66,6 +73,10 @@ Required keys:
 - education: list of objects with keys (degree, school, field, startDate, endDate)
 - work_experience: list of objects with keys (title, company, startDate, endDate, description)
 
+Optional keys:
+- projects: list of objects with keys (name, link, type)
+- languages: list of objects with keys (name, proficiency)
+
 Resume:\n{resume_text}
 
 Return JSON only (no markdown).
@@ -75,12 +86,10 @@ Return JSON only (no markdown).
                 return {}
             text = response.text.strip()
 
-            # Try direct JSON parsing, otherwise extract JSON block
             try:
                 parsed = json.loads(text)
                 return parsed
             except Exception:
-                # try to extract first JSON object from text
                 start = text.find('{')
                 end = text.rfind('}')
                 if start != -1 and end != -1 and end > start:
@@ -173,7 +182,7 @@ Return JSON only (no markdown).
             try:
                 work_exp = candidate_data.get('work_experience', [])
                 work_summary = "; ".join([str(e)[:50] for e in work_exp[:2]]) if isinstance(work_exp, list) else str(work_exp)[:100]
-                
+
                 from ..config import settings
                 # Use Gemini to generate a more engaging summary
                 prompt = f"""Create a 1-2 sentence professional summary for this candidate:
@@ -184,7 +193,7 @@ Work background: {work_summary}
 Education: {', '.join(education[:3]) if isinstance(education, list) else str(education)[:100]}
 
 Generate a compelling, concise summary highlighting their unique value. Keep it under 50 words."""
-                
+
                 response = self.gemini_service.client.generate_content(prompt)
                 enhanced_summary = response.text.strip()
                 return enhanced_summary if enhanced_summary else heuristic_summary
@@ -202,12 +211,12 @@ Generate a compelling, concise summary highlighting their unique value. Keep it 
     ) -> str:
         """
         Generate LLM-powered explanation of why a job matches a candidate.
-        
+
         Args:
             job_data: Job posting data
             candidate_data: Candidate profile data
             match_score: Similarity score (0-1)
-            
+
         Returns:
             str: Human-friendly explanation
         """
@@ -240,11 +249,11 @@ Generate a compelling, concise summary highlighting their unique value. Keep it 
     def generate_career_path(self, candidate_data: Dict, target_roles: Optional[List[str]] = None) -> str:
         """
         Generate career path + learning recommendations using Gemini.
-        
+
         Args:
             candidate_data: Candidate profile data
             target_roles: Roles candidate is interested in (optional)
-            
+
         Returns:
             str: Career path recommendation
         """
@@ -270,7 +279,7 @@ Generate a compelling, concise summary highlighting their unique value. Keep it 
     ) -> Dict:
         """
         Perform semantic reasoning about job fit using Gemini.
-        
+
         Returns dict with: reasoning, skill_gaps, strengths, recommendation
         """
         skills = candidate_data.get('skills', [])
@@ -306,4 +315,3 @@ Generate a compelling, concise summary highlighting their unique value. Keep it 
 
 # Global AI service instance
 ai_service = AIService()
-
