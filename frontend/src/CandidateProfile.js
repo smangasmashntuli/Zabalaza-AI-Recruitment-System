@@ -1,9 +1,171 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import './CandidateProfile.css';
-import { getCandidateProfile, updateCandidateProfile, uploadResume, uploadCertificate, optimizeCvSection } from './api/candidates';
+import {
+  getCandidateProfile,
+  updateCandidateProfile,
+  uploadResume,
+  uploadCertificate,
+  optimizeCvSection,
+} from './api/candidates';
+
+const createEmptyProfile = () => ({
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  location: '',
+  title: '',
+  bio: '',
+  website: '',
+  linkedin: '',
+  github: '',
+  experience: [],
+  education: [],
+  skills: [],
+  certifications: [],
+  projects: [],
+  languages: [],
+  extractionReport: null,
+  resumePath: null,
+  resumeText: '',
+});
+
+const parseMaybeJson = (value, fallback = []) => {
+  if (Array.isArray(value)) return value;
+  if (!value) return fallback;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+};
+
+const isYearLike = (value) => {
+  if (!value) return false;
+  const text = String(value).trim();
+  return /^(?:19|20)\d{2}$/.test(text) || /^(?:19|20)\d{2}-\d{2}$/.test(text);
+};
+
+const normalizeDateInput = (value) => {
+  if (!value) return '';
+  const text = String(value).trim().toLowerCase();
+  if (!text) return '';
+  if (['present', 'current', 'now'].includes(text)) return 'present';
+  if (/^(?:19|20)\d{2}-\d{2}$/.test(text)) return text;
+  if (/^(?:19|20)\d{2}$/.test(text)) return `${text}-01`;
+
+  const date = new Date(value);
+  if (!Number.isNaN(date.getTime())) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  }
+
+  const yearMatch = text.match(/((?:19|20)\d{2})/);
+  return yearMatch ? `${yearMatch[1]}-01` : '';
+};
+
+const formatDisplayDate = (value) => {
+  if (!value || value === 'Not provided') return 'Not provided';
+  const text = String(value).trim();
+  if (!text) return 'Not provided';
+  if (['present', 'current'].includes(text.toLowerCase())) return 'Present';
+  if (/^(?:19|20)\d{2}-\d{2}$/.test(text)) {
+    const date = new Date(`${text}-01T00:00:00`);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    }
+  }
+  if (/^(?:19|20)\d{2}$/.test(text)) return text;
+  const date = new Date(text);
+  if (!Number.isNaN(date.getTime())) {
+    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  }
+  return text;
+};
+
+const normalizeSkills = (value) => Array.from(new Set(parseMaybeJson(value).map((item) => String(item || '').trim()).filter(Boolean)));
+
+const normalizeExperience = (list = []) =>
+  parseMaybeJson(list).map((item, index) => ({
+    id: item.id || item.uuid || `exp-${index}`,
+    title: item.title || item.position || item.job_title || item.role || '',
+    company: item.company || item.employer || '',
+    location: item.location || item.city || '',
+    startDate: normalizeDateInput(item.startDate || item.start_date || item.from || item.from_date || item.dates || ''),
+    endDate: normalizeDateInput(item.endDate || item.end_date || item.to || item.to_date || ''),
+    current: Boolean(item.current || item.is_current || item.currently_working || false),
+    description: item.description || item.summary || item.responsibilities || '',
+  }));
+
+const normalizeEducation = (list = []) =>
+  parseMaybeJson(list).map((item, index) => {
+    const rawDegree = item.degree || item.title || item.qualification || '';
+    const rawField = item.field || item.major || item.area || '';
+    let school = item.school || item.institution || item.university || '';
+    if (!school || isYearLike(school)) {
+      const source = [rawField, rawDegree, item.fieldOfStudy, item.course].filter(Boolean).join(' ');
+      const parts = source
+        .split(/[-|•]/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+      const inferred = parts
+        .slice(0, -1)
+        .reverse()
+        .find((part) => part && !isYearLike(part));
+      school = inferred || school || '';
+    }
+
+    let degree = rawDegree;
+    let field = rawField;
+    if (!field && degree && /\bin\b/i.test(degree)) {
+      const pieces = degree.split(/\bin\b/i);
+      degree = pieces[0].trim();
+      field = pieces[1]?.trim() || '';
+    }
+
+    if (!degree && rawField) {
+      degree = rawField.includes(' in ') ? rawField.split(/\bin\b/i)[0].trim() : rawField;
+    }
+
+    return {
+      id: item.id || item.uuid || `edu-${index}`,
+      degree,
+      field,
+      school,
+      startDate: normalizeDateInput(item.startDate || item.start_date || item.from || ''),
+      endDate: normalizeDateInput(item.endDate || item.end_date || item.to || ''),
+      current: Boolean(item.current || item.is_current || false),
+    };
+  });
+
+const createEmptyExperience = () => ({
+  id: `new-exp-${Date.now()}`,
+  title: '',
+  company: '',
+  location: '',
+  startDate: '',
+  endDate: '',
+  current: false,
+  description: '',
+});
+
+const createEmptyEducation = () => ({
+  id: `new-edu-${Date.now()}`,
+  degree: '',
+  field: '',
+  school: '',
+  startDate: '',
+  endDate: '',
+  current: false,
+});
 
 function CandidateProfile({ onClose, onProfileUpdated }) {
-  const [profile, setProfile] = useState(null);
+  const [profile, setProfile] = useState(createEmptyProfile());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -17,132 +179,109 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
   const [cvOptimizationMessage, setCvOptimizationMessage] = useState('');
   const [cvOptimizing, setCvOptimizing] = useState(false);
 
-  // Load profile data on component mount
   useEffect(() => {
     loadProfile();
   }, []);
+
+  const mapBackendProfile = (data) => ({
+    firstName: data.first_name || data.firstName || '',
+    lastName: data.last_name || data.lastName || '',
+    email: data.email || '',
+    phone: data.phone || '',
+    location: data.location || '',
+    title: data.title || '',
+    bio: data.bio || '',
+    website: data.website || '',
+    linkedin: data.linkedin || '',
+    github: data.github || '',
+    experience: normalizeExperience(data.work_experience_list || data.work_experience || data.experience || []),
+    education: normalizeEducation(data.education_list || data.education || []),
+    skills: normalizeSkills(data.skills_list || data.skills || []),
+    certifications: parseMaybeJson(data.certifications || []),
+    projects: parseMaybeJson(data.projects || []),
+    languages: parseMaybeJson(data.languages || []),
+    extractionReport: data.extraction_report || null,
+    resumePath: data.resume_path || data.resumePath || null,
+    resumeText: data.resume_text || '',
+  });
 
   const loadProfile = async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await getCandidateProfile();
-      // The backend may store parsed resume results under several keys depending on pipeline.
-      const parsed = data.parsed_resume || data.resume_parsed || data.parsed || data.resume_extracted || {};
-
-      const normalizeDate = (v) => {
-        if (!v) return null;
-        const d = new Date(v);
-        return isNaN(d.getTime()) ? null : d.toISOString();
-      };
-
-      const normalizeExperience = (list = []) => {
-        const mapped = (list || []).map((e, idx) => ({
-          id: e.id || e.uuid || idx,
-          title: e.title || e.position || e.job_title || e.role || '',
-          company: e.company || e.employer || '',
-          location: e.location || e.city || '',
-          startDate: normalizeDate(e.start_date || e.startDate || e.from || e.from_date),
-          endDate: normalizeDate(e.end_date || e.endDate || e.to || e.to_date),
-          current: !!(e.current || e.is_current || e.currently_working || false),
-          description: e.description || e.summary || e.responsibilities || '',
-        }));
-
-        mapped.sort((a, b) => {
-          const aTime = a.startDate ? Date.parse(a.startDate) : (a.endDate ? Date.parse(a.endDate) : 0);
-          const bTime = b.startDate ? Date.parse(b.startDate) : (b.endDate ? Date.parse(b.endDate) : 0);
-          return (bTime || 0) - (aTime || 0);
-        });
-
-        return mapped;
-      };
-
-      const normalizeEducation = (list = []) => {
-        const mapped = (list || []).map((e, idx) => ({
-          id: e.id || e.uuid || idx,
-          degree: e.degree || e.title || e.qualification || '',
-          field: e.field || e.major || e.area || '',
-          school: e.school || e.institution || e.university || '',
-          startDate: normalizeDate(e.start_date || e.startDate || e.from),
-          endDate: normalizeDate(e.end_date || e.endDate || e.to),
-          current: !!(e.current || e.is_current || false),
-        }));
-
-        mapped.sort((a, b) => {
-          const aTime = a.endDate ? Date.parse(a.endDate) : (a.startDate ? Date.parse(a.startDate) : 0);
-          const bTime = b.endDate ? Date.parse(b.endDate) : (b.startDate ? Date.parse(b.startDate) : 0);
-          return (bTime || 0) - (aTime || 0);
-        });
-
-        return mapped;
-      };
-
-      const normalizeSkills = (list = []) => {
-        const items = (list || []).map(s => (s || '').toString().trim());
-        return Array.from(new Set(items.filter(Boolean)));
-      };
-
-      // Prefer parsed resume structured output when available, otherwise fall back to profile lists
-      const experienceSource = parsed.work_experience || parsed.experience || data.work_experience_list || data.experience || [];
-      const educationSource = parsed.education || data.education_list || data.education || [];
-      const skillsSource = parsed.skills || data.skills_list || data.skills || [];
-
-      const transformedProfile = {
-        firstName: data.first_name || data.firstName || parsed.first_name || parsed.firstName || '',
-        lastName: data.last_name || data.lastName || parsed.last_name || parsed.lastName || '',
-        email: data.email || parsed.email || '',
-        phone: data.phone || parsed.phone || '',
-        location: data.location || parsed.location || '',
-        title: data.title || parsed.title || parsed.target_role || '',
-        bio: data.bio || parsed.summary || parsed.profile || '',
-        website: data.website || parsed.website || '',
-        linkedin: data.linkedin || parsed.linkedin || '',
-        github: data.github || parsed.github || '',
-        experience: normalizeExperience(experienceSource),
-        education: normalizeEducation(educationSource),
-        skills: normalizeSkills(skillsSource),
-        certifications: data.certifications || parsed.certifications || [],
-        resumePath: data.resume_path || data.resumePath || null,
-        resumeText: data.resume_text || parsed.resume_text || parsed.text || '',
-      };
-
-      setProfile(transformedProfile);
+      setProfile(mapBackendProfile(data));
+      if (data?.extraction_report?.needs_review) {
+        setResumeMessage(data.extraction_report.review_notes || 'Your CV was uploaded, but some fields need review.');
+      }
     } catch (err) {
       console.error('Error loading profile:', err);
       setError('Failed to load profile. Please try again.');
-
-      // Set default profile if loading fails
-      setProfile({
-        firstName: '',
-        lastName: '',
-        email: '',
-        phone: '',
-        location: '',
-        title: '',
-        bio: '',
-        website: '',
-        linkedin: '',
-        github: '',
-        experience: [],
-        education: [],
-        skills: [],
-        certifications: [],
-        resumePath: null,
-      });
+      setProfile(createEmptyProfile());
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAddSkill = () => {
-    if (newSkill.trim() && !profile.skills.includes(newSkill.trim())) {
-      setProfile({ ...profile, skills: [...profile.skills, newSkill.trim()] });
-      setNewSkill('');
-    }
+  const updateExperienceItem = (id, field, value) => {
+    setProfile((current) => ({
+      ...current,
+      experience: current.experience.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
+    }));
   };
 
-  const handleRemoveSkill = (skillToRemove) => {
-    setProfile({ ...profile, skills: profile.skills.filter(s => s !== skillToRemove) });
+  const updateEducationItem = (id, field, value) => {
+    setProfile((current) => ({
+      ...current,
+      education: current.education.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
+    }));
+  };
+
+  const addSkill = () => {
+    const value = newSkill.trim();
+    if (!value) return;
+    setProfile((current) => ({
+      ...current,
+      skills: current.skills.includes(value) ? current.skills : [...current.skills, value],
+    }));
+    setNewSkill('');
+  };
+
+  const removeSkill = (skillToRemove) => {
+    setProfile((current) => ({
+      ...current,
+      skills: current.skills.filter((skill) => skill !== skillToRemove),
+    }));
+  };
+
+  const addExperience = () => {
+    setProfile((current) => ({
+      ...current,
+      experience: [createEmptyExperience(), ...(current.experience || [])],
+    }));
+    setIsEditing(true);
+  };
+
+  const removeExperience = (id) => {
+    setProfile((current) => ({
+      ...current,
+      experience: current.experience.filter((item) => item.id !== id),
+    }));
+  };
+
+  const addEducation = () => {
+    setProfile((current) => ({
+      ...current,
+      education: [createEmptyEducation(), ...(current.education || [])],
+    }));
+    setIsEditing(true);
+  };
+
+  const removeEducation = (id) => {
+    setProfile((current) => ({
+      ...current,
+      education: current.education.filter((item) => item.id !== id),
+    }));
   };
 
   const handleSaveProfile = async () => {
@@ -150,8 +289,7 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
       setSaving(true);
       setError(null);
 
-      // Transform profile data for backend
-      const profileData = {
+      await updateCandidateProfile({
         first_name: profile.firstName,
         last_name: profile.lastName,
         phone: profile.phone,
@@ -165,12 +303,9 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
         work_experience: profile.experience,
         education: profile.education,
         certifications: profile.certifications,
-      };
+      });
 
-      await updateCandidateProfile(profileData);
       setIsEditing(false);
-
-      // Reload profile to get updated data
       await loadProfile();
       await onProfileUpdated?.();
     } catch (err) {
@@ -182,20 +317,25 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
   };
 
   const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
+    const file = event.target.files?.[0];
     if (!file) return;
 
     try {
       setSaving(true);
       setResumeUploading(true);
       setError(null);
-      setResumeMessage(`Uploading ${file.name} and extracting your CV text...`);
-      await uploadResume(file);
+      setResumeMessage(`Uploading ${file.name} and extracting your CV...`);
+      const uploadResult = await uploadResume(file);
 
-      // Reload profile to get updated resume path
+      const review = uploadResult?.extraction_report;
+      if (review?.needs_review) {
+        setResumeMessage(review.review_notes || 'CV uploaded. Some fields need review.');
+      } else {
+        setResumeMessage('CV uploaded successfully. Your profile was auto-filled from the extracted CV data.');
+      }
+
       await loadProfile();
       await onProfileUpdated?.();
-      setResumeMessage('CV uploaded successfully. Your profile and job recommendations were refreshed.');
     } catch (err) {
       console.error('Error uploading resume:', err);
       setResumeMessage('');
@@ -208,7 +348,7 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
   };
 
   const handleCertificateUpload = async (event) => {
-    const file = event.target.files[0];
+    const file = event.target.files?.[0];
     if (!file) return;
 
     try {
@@ -216,8 +356,6 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
       setError(null);
       setResumeMessage(`Uploading certificate ${file.name}...`);
       await uploadCertificate(file);
-
-      // Reload profile to reflect new certificate
       await loadProfile();
       setResumeMessage('Certificate uploaded successfully.');
     } catch (err) {
@@ -227,35 +365,6 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
       setSaving(false);
       event.target.value = '';
     }
-  };
-
-  const handleAddExperience = () => {
-    const newExp = {
-      id: `new-${Date.now()}`,
-      title: '',
-      company: '',
-      location: '',
-      startDate: null,
-      endDate: null,
-      current: false,
-      description: '',
-    };
-    setProfile({ ...profile, experience: [newExp, ...(profile.experience || [])] });
-    setIsEditing(true);
-  };
-
-  const handleAddEducation = () => {
-    const newEdu = {
-      id: `new-${Date.now()}`,
-      degree: '',
-      field: '',
-      school: '',
-      startDate: null,
-      endDate: null,
-      current: false,
-    };
-    setProfile({ ...profile, education: [newEdu, ...(profile.education || [])] });
-    setIsEditing(true);
   };
 
   const handleOptimizeCvSection = async (section) => {
@@ -280,12 +389,14 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
     return profile.resumePath.split(/[\\/]/).pop();
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  const formatDateRange = (start, end, current) => {
+    const startLabel = formatDisplayDate(start);
+    const endLabel = current ? 'Present' : formatDisplayDate(end);
+    if (startLabel === 'Not provided' && endLabel === 'Not provided') return 'Not provided';
+    if (startLabel === 'Not provided') return endLabel;
+    return `${startLabel} - ${endLabel}`;
   };
 
-  // SVG Icons
   const Icon = ({ name, size = 20 }) => {
     const icons = {
       user: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />,
@@ -294,7 +405,7 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
       location: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z" />,
       link: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />,
       briefcase: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />,
-      education: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />,
+      education: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5zM12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />,
       award: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />,
       upload: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />,
       edit: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />,
@@ -309,15 +420,29 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
     };
     return (
       <svg width={size} height={size} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        {icons[name] || icons['user']}
+        {icons[name] || icons.user}
       </svg>
     );
   };
 
+  const extractionSummary = useMemo(() => {
+    const report = profile.extractionReport;
+    if (!report) return null;
+    const verified = report.validation?.verified_fields || [];
+    const ambiguous = report.validation?.ambiguous_fields || [];
+    const missing = report.validation?.missing_fields || [];
+    return {
+      note: report.validation?.review_notes || '',
+      needsReview: Boolean(report.validation?.needs_review),
+      verified,
+      ambiguous,
+      missing,
+    };
+  }, [profile.extractionReport]);
+
   return (
     <div className="profile-modal-overlay">
       <div className="profile-modal">
-        {/* Header */}
         <div className="profile-header">
           <div className="profile-header-content">
             <div className="profile-header-left">
@@ -328,7 +453,7 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
               {!loading && (
                 <button
                   className={`profile-action-button ${isEditing ? 'save' : 'edit'}`}
-                  onClick={() => isEditing ? handleSaveProfile() : setIsEditing(true)}
+                  onClick={() => (isEditing ? handleSaveProfile() : setIsEditing(true))}
                   disabled={saving}
                 >
                   <Icon name={isEditing ? 'save' : 'edit'} size={18} />
@@ -341,559 +466,420 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
             </div>
           </div>
 
-          {/* Tab Navigation */}
           {!loading && (
             <div className="profile-tabs">
-              <button
-                className={`profile-tab ${activeTab === 'overview' ? 'active' : ''}`}
-                onClick={() => setActiveTab('overview')}
-              >
-                Overview
-              </button>
-              <button
-                className={`profile-tab ${activeTab === 'experience' ? 'active' : ''}`}
-                onClick={() => setActiveTab('experience')}
-              >
-                Experience
-              </button>
-              <button
-                className={`profile-tab ${activeTab === 'education' ? 'active' : ''}`}
-                onClick={() => setActiveTab('education')}
-              >
-                Education
-              </button>
-              <button
-                className={`profile-tab ${activeTab === 'skills' ? 'active' : ''}`}
-                onClick={() => setActiveTab('skills')}
-              >
-                Skills & Certifications
-              </button>
+              {['overview', 'experience', 'education', 'skills'].map((tab) => (
+                <button
+                  key={tab}
+                  className={`profile-tab ${activeTab === tab ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab)}
+                >
+                  {tab === 'overview' ? 'Overview' : tab === 'skills' ? 'Skills & Certifications' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
             </div>
           )}
         </div>
 
-        {/* Content */}
         <div className="profile-content">
           {loading ? (
-            <div className="profile-state">
-              <p>Loading profile...</p>
-            </div>
+            <div className="profile-state"><p>Loading profile...</p></div>
           ) : error ? (
             <div className="profile-state error">
               <p>{error}</p>
               <button onClick={loadProfile} className="profile-state-button">Retry</button>
             </div>
-          ) : profile && (
+          ) : (
             <>
-              {/* Tabs content - wrapped in fragment */}
-
-          {/* Overview Tab */}
-          {activeTab === 'overview' && (
-            <div className="profile-tab-content">
-              {/* Profile Card */}
-              <div className="profile-card profile-hero-card">
-                <div className="profile-hero-content">
-                  <div className="profile-avatar-container">
-                    <div className="profile-avatar-large">
-                      {profile.firstName?.[0] || 'U'}{profile.lastName?.[0] || 'U'}
-                    </div>
-                    {isEditing && (
-                      <button className="avatar-upload-button">
-                        <Icon name="upload" size={16} />
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="profile-hero-info">
-                    {isEditing ? (
-                      <div className="profile-edit-section">
-                        <div className="input-row">
-                          <div className="input-group">
-                            <label className="input-label">First Name</label>
-                            <input
-                              type="text"
-                              value={profile.firstName}
-                              onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
-                              className="profile-input"
-                            />
-                          </div>
-                          <div className="input-group">
-                            <label className="input-label">Last Name</label>
-                            <input
-                              type="text"
-                              value={profile.lastName}
-                              onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
-                              className="profile-input"
-                            />
-                          </div>
-                        </div>
-                        <div className="input-group">
-                          <label className="input-label">Professional Title</label>
-                          <input
-                            type="text"
-                            value={profile.title}
-                            onChange={(e) => setProfile({ ...profile, title: e.target.value })}
-                            className="profile-input"
-                          />
-                        </div>
-                        <div className="input-group">
-                          <label className="input-label">Bio</label>
-                          <textarea
-                            value={profile.bio}
-                            onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-                            className="profile-textarea"
-                            rows={4}
-                          />
+              {activeTab === 'overview' && (
+                <div className="profile-tab-content">
+                  <div className="profile-card profile-hero-card">
+                    <div className="profile-hero-content">
+                      <div className="profile-avatar-container">
+                        <div className="profile-avatar-large">
+                          {(profile.firstName?.[0] || 'U').toUpperCase()}{(profile.lastName?.[0] || 'U').toUpperCase()}
                         </div>
                       </div>
-                    ) : (
-                      <>
-                        <h2 className="profile-name">{profile.firstName} {profile.lastName}</h2>
-                        <p className="profile-title">{profile.title}</p>
-                        <p className="profile-bio">{profile.bio}</p>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* CV Upload Card */}
-              <div className="profile-card">
-                <div className="profile-card-header">
-                  <div className="card-header-left">
-                    <Icon name="upload" size={22} />
-                    <h3 className="profile-card-title">Upload CV</h3>
-                  </div>
-                  <span className="skill-count">{profile.resumePath ? 'CV connected' : 'Upload required'}</span>
-                </div>
-                <div className="profile-card-body">
-                  <div className="resume-upload-zone">
-                    <div className="upload-icon-container">
-                      <Icon name="upload" size={48} />
-                    </div>
-                    <h4 className="upload-title">Upload your CV</h4>
-                    <p className="upload-subtitle">
-                      We will extract the text from your CV, update your profile, and refresh your job matches in real time.
-                    </p>
-                    <label className={`upload-button ${resumeUploading ? 'disabled' : ''}`}>
-                      <Icon name={resumeUploading ? 'briefcase' : 'upload'} size={18} />
-                      {resumeUploading ? 'Uploading...' : 'Choose CV'}
-                      <input
-                        type="file"
-                        accept=".pdf,.doc,.docx"
-                        onChange={handleFileUpload}
-                        disabled={resumeUploading || saving}
-                        style={{ display: 'none' }}
-                      />
-                    </label>
-                    {resumeMessage && <p className="resume-upload-status">{resumeMessage}</p>}
-                  </div>
-
-                  {profile.resumePath && (
-                    <div className="current-resume">
-                      <Icon name="link" size={16} />
-                      <span>Current CV: {getResumeFileName()}</span>
-                      <span className="resume-date">Used for profile extraction and job matching</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Contact Information */}
-              <div className="profile-card">
-                <div className="profile-card-header">
-                  <h3 className="profile-card-title">Contact Information</h3>
-                </div>
-                <div className="profile-card-body">
-                  <div className="contact-grid">
-                    <div className="contact-item">
-                      <div className="contact-icon">
-                        <Icon name="mail" size={20} />
-                      </div>
-                      <div className="contact-content">
-                        <label className="contact-label">Email</label>
+                      <div className="profile-hero-info">
                         {isEditing ? (
-                          <input
-                            type="email"
-                            value={profile.email}
-                            onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                            className="profile-input-small"
-                          />
-                        ) : (
-                          <p className="contact-value">{profile.email}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="contact-item">
-                      <div className="contact-icon">
-                        <Icon name="phone" size={20} />
-                      </div>
-                      <div className="contact-content">
-                        <label className="contact-label">Phone</label>
-                        {isEditing ? (
-                          <input
-                            type="tel"
-                            value={profile.phone}
-                            onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                            className="profile-input-small"
-                          />
-                        ) : (
-                          <p className="contact-value">{profile.phone}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="contact-item">
-                      <div className="contact-icon">
-                        <Icon name="location" size={20} />
-                      </div>
-                      <div className="contact-content">
-                        <label className="contact-label">Location</label>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={profile.location}
-                            onChange={(e) => setProfile({ ...profile, location: e.target.value })}
-                            className="profile-input-small"
-                          />
-                        ) : (
-                          <p className="contact-value">{profile.location}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="contact-item">
-                      <div className="contact-icon">
-                        <Icon name="link" size={20} />
-                      </div>
-                      <div className="contact-content">
-                        <label className="contact-label">Website</label>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={profile.website}
-                            onChange={(e) => setProfile({ ...profile, website: e.target.value })}
-                            className="profile-input-small"
-                          />
-                        ) : (
-                          <a href={`https://${profile.website}`} className="contact-link" target="_blank" rel="noopener noreferrer">
-                            {profile.website}
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="social-links-section">
-                    <h4 className="section-subtitle">Social Links</h4>
-                    <div className="social-links-grid">
-                      <div className="social-link-item">
-                        <div className="social-icon linkedin">
-                          <Icon name="linkedin" size={18} />
-                        </div>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={profile.linkedin}
-                            onChange={(e) => setProfile({ ...profile, linkedin: e.target.value })}
-                            className="profile-input-small"
-                            placeholder="LinkedIn URL"
-                          />
-                        ) : (
-                          <a href={`https://${profile.linkedin}`} className="social-link" target="_blank" rel="noopener noreferrer">
-                            {profile.linkedin}
-                          </a>
-                        )}
-                      </div>
-
-                      <div className="social-link-item">
-                        <div className="social-icon github">
-                          <Icon name="github" size={18} />
-                        </div>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={profile.github}
-                            onChange={(e) => setProfile({ ...profile, github: e.target.value })}
-                            className="profile-input-small"
-                            placeholder="GitHub URL"
-                          />
-                        ) : (
-                          <a href={`https://${profile.github}`} className="social-link" target="_blank" rel="noopener noreferrer">
-                            {profile.github}
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Experience Tab */}
-          {activeTab === 'experience' && (
-            <div className="profile-tab-content">
-              <div className="profile-card">
-                <div className="profile-card-header">
-                  <div className="card-header-left">
-                    <Icon name="briefcase" size={22} />
-                    <h3 className="profile-card-title">Work Experience</h3>
-                  </div>
-                  {isEditing && (
-                    <button className="add-button" onClick={handleAddExperience}>
-                      <Icon name="plus" size={18} />
-                      Add Experience
-                    </button>
-                  )}
-                </div>
-                <div className="profile-card-body">
-                  <div className="timeline">
-                    {profile.experience.map((exp) => (
-                      <div key={exp.id} className="timeline-item">
-                        <div className="timeline-marker"></div>
-                        <div className="timeline-content">
-                          <div className="timeline-header">
-                            <div className="timeline-title-group">
-                              <h4 className="timeline-title">{exp.title}</h4>
-                              <p className="timeline-company">{exp.company}</p>
-                              <p className="timeline-location">
-                                <Icon name="location" size={14} />
-                                {exp.location}
-                              </p>
+                          <div className="profile-edit-section">
+                            <div className="input-row">
+                              <div className="input-group"><label className="input-label">First Name</label><input type="text" value={profile.firstName} onChange={(e) => setProfile((current) => ({ ...current, firstName: e.target.value }))} className="profile-input" /></div>
+                              <div className="input-group"><label className="input-label">Last Name</label><input type="text" value={profile.lastName} onChange={(e) => setProfile((current) => ({ ...current, lastName: e.target.value }))} className="profile-input" /></div>
                             </div>
-                            {isEditing && (
-                              <button className="delete-button">
-                                <Icon name="trash" size={18} />
-                              </button>
-                            )}
+                            <div className="input-group"><label className="input-label">Professional Title</label><input type="text" value={profile.title} onChange={(e) => setProfile((current) => ({ ...current, title: e.target.value }))} className="profile-input" /></div>
+                            <div className="input-group"><label className="input-label">Bio</label><textarea value={profile.bio} onChange={(e) => setProfile((current) => ({ ...current, bio: e.target.value }))} className="profile-textarea" rows={4} /></div>
                           </div>
-                          <p className="timeline-date">
-                            {formatDate(exp.startDate)} - {exp.current ? 'Present' : formatDate(exp.endDate)}
-                          </p>
-                          <p className="timeline-description">{exp.description}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Education Tab */}
-          {activeTab === 'education' && (
-            <div className="profile-tab-content">
-              <div className="profile-card">
-                <div className="profile-card-header">
-                  <div className="card-header-left">
-                    <Icon name="education" size={22} />
-                    <h3 className="profile-card-title">Education</h3>
-                  </div>
-                  {isEditing && (
-                    <button className="add-button" onClick={handleAddEducation}>
-                      <Icon name="plus" size={18} />
-                      Add Education
-                    </button>
-                  )}
-                </div>
-                <div className="profile-card-body">
-                  <div className="timeline">
-                    {profile.education.map((edu) => (
-                      <div key={edu.id} className="timeline-item education">
-                        <div className="timeline-marker education"></div>
-                        <div className="timeline-content">
-                          <div className="timeline-header">
-                            <div className="timeline-title-group">
-                              <h4 className="timeline-title">{edu.degree} in {edu.field}</h4>
-                              <p className="timeline-company">{edu.school}</p>
-                            </div>
-                            {isEditing && (
-                              <button className="delete-button">
-                                <Icon name="trash" size={18} />
-                              </button>
-                            )}
-                          </div>
-                          <p className="timeline-date">
-                            {formatDate(edu.startDate)} - {edu.current ? 'Present' : formatDate(edu.endDate)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Skills & Certifications Tab */}
-          {activeTab === 'skills' && (
-            <div className="profile-tab-content">
-              {/* Skills Section */}
-              <div className="profile-card">
-                <div className="profile-card-header">
-                  <div className="card-header-left">
-                    <Icon name="award" size={22} />
-                    <h3 className="profile-card-title">Skills</h3>
-                  </div>
-                  <span className="skill-count">{profile.skills.length} skills</span>
-                </div>
-                <div className="profile-card-body">
-                  <div className="skills-grid">
-                    {profile.skills.map((skill, index) => (
-                      <div key={index} className="skill-chip">
-                        <span className="skill-name">{skill}</span>
-                        {isEditing && (
-                          <button
-                            onClick={() => handleRemoveSkill(skill)}
-                            className="skill-remove"
-                          >
-                            <Icon name="close" size={14} />
-                          </button>
+                        ) : (
+                          <>
+                            <h2 className="profile-name">{profile.firstName} {profile.lastName}</h2>
+                            <p className="profile-title">{profile.title || 'Not provided'}</p>
+                            <p className="profile-bio">{profile.bio || 'No bio available yet. Upload your CV to auto-fill your profile.'}</p>
+                          </>
                         )}
                       </div>
-                    ))}
-                  </div>
-
-                  {isEditing && (
-                    <div className="add-skill-section">
-                      <input
-                        type="text"
-                        value={newSkill}
-                        onChange={(e) => setNewSkill(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleAddSkill()}
-                        className="profile-input"
-                        placeholder="Add a new skill (press Enter)"
-                      />
-                      <button onClick={handleAddSkill} className="add-skill-button">
-                        <Icon name="plus" size={18} />
-                        Add Skill
-                      </button>
                     </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Certifications Section */}
-              <div className="profile-card">
-                <div className="profile-card-header">
-                  <div className="card-header-left">
-                    <Icon name="certificate" size={22} />
-                    <h3 className="profile-card-title">Certifications</h3>
                   </div>
-                   {isEditing && (
-                     <label className="add-button upload-cert-label">
-                       <Icon name="plus" size={18} />
-                       Upload Certificate
-                       <input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onChange={handleCertificateUpload} style={{ display: 'none' }} />
-                     </label>
-                   )}
-                </div>
-                <div className="profile-card-body">
-                  <div className="certifications-list">
-                    {profile.certifications.map((cert) => (
-                      <div key={cert.id} className="certification-item">
-                        <div className="certification-icon">
-                          <Icon name="certificate" size={24} />
-                        </div>
-                        <div className="certification-content">
-                          <h4 className="certification-name">{cert.name}</h4>
-                          <p className="certification-issuer">{cert.issuer}</p>
-                          {cert.path ? (
-                            <a href={cert.path} target="_blank" rel="noopener noreferrer">Download</a>
-                          ) : (
-                            <p className="certification-date">Issued {cert.date}</p>
-                          )}
-                        </div>
-                        {isEditing && (
-                          <button className="delete-button">
-                            <Icon name="trash" size={18} />
-                          </button>
-                        )}
+
+                  {extractionSummary && (
+                    <div className="profile-card">
+                      <div className="profile-card-header">
+                        <div className="card-header-left"><Icon name="sparkles" size={22} /><h3 className="profile-card-title">CV Extraction</h3></div>
+                        <span className="skill-count">{extractionSummary.needsReview ? 'Needs review' : 'Validated'}</span>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Resume Upload */}
-              <div className="profile-card">
-                <div className="profile-card-header">
-                  <h3 className="profile-card-title">Resume</h3>
-                </div>
-                <div className="profile-card-body">
-                  <div className="resume-upload-zone">
-                    <div className="upload-icon-container">
-                      <Icon name="upload" size={48} />
-                    </div>
-                    <h4 className="upload-title">Upload your resume</h4>
-                    <p className="upload-subtitle">PDF, DOC, DOCX (max. 5MB)</p>
-                    <label className="upload-button">
-                      <Icon name="upload" size={18} />
-                      Choose File
-                      <input
-                        type="file"
-                        accept=".pdf,.doc,.docx"
-                        onChange={handleFileUpload}
-                        style={{ display: 'none' }}
-                      />
-                    </label>
-                  </div>
-                  {profile.resumePath && (
-                    <div className="current-resume">
-                      <Icon name="link" size={16} />
-                      <span>Current resume: {profile.resumePath.split('/').pop()}</span>
-                      <span className="resume-date">Updated recently</span>
+                      <div className="profile-card-body">
+                        <p className="upload-subtitle" style={{ marginTop: 0 }}>{extractionSummary.note}</p>
+                        <div className="skills-grid" style={{ marginBottom: 12 }}>
+                          <div className="skill-chip"><span className="skill-name">Verified: {extractionSummary.verified.length || 0}</span></div>
+                          <div className="skill-chip"><span className="skill-name">Needs review: {extractionSummary.ambiguous.length || 0}</span></div>
+                          <div className="skill-chip"><span className="skill-name">Missing: {extractionSummary.missing.length || 0}</span></div>
+                        </div>
+                      </div>
                     </div>
                   )}
-                </div>
-              </div>
 
-              {/* Gemini CV Optimization */}
-              <div className="profile-card">
-                <div className="profile-card-header">
-                  <div className="card-header-left">
-                    <Icon name="sparkles" size={22} />
-                    <h3 className="profile-card-title">Gemini CV Optimization</h3>
-                  </div>
-                  <span className="skill-count">AI rewrite help</span>
-                </div>
-                <div className="profile-card-body">
-                  <p className="upload-subtitle" style={{ marginTop: 0 }}>
-                    Improve one section at a time with ATS-friendly wording and role-specific keywords.
-                  </p>
-                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '16px' }}>
-                    {['summary', 'skills', 'experience'].map((section) => (
-                      <button
-                        key={section}
-                        type="button"
-                        className={`profile-action-button ${cvOptimizationSection === section ? 'save' : 'edit'}`}
-                        onClick={() => handleOptimizeCvSection(section)}
-                        disabled={cvOptimizing}
-                      >
-                        {cvOptimizing && cvOptimizationSection === section ? `Optimizing ${section}...` : `Optimize ${section}`}
-                      </button>
-                    ))}
-                  </div>
-
-                  {(cvOptimizationResult || cvOptimizationMessage) && (
-                    <div style={{ background: 'rgba(14,165,233,0.06)', borderRadius: '16px', padding: '16px' }}>
-                      <h4 style={{ marginTop: 0, marginBottom: '10px' }}>
-                        Suggested {cvOptimizationSection.charAt(0).toUpperCase() + cvOptimizationSection.slice(1)}
-                      </h4>
-                      {cvOptimizationMessage && <p style={{ color: '#b91c1c' }}>{cvOptimizationMessage}</p>}
-                      {cvOptimizationResult && (
-                        <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit', lineHeight: 1.6 }}>
-                          {cvOptimizationResult}
-                        </pre>
+                  <div className="profile-card">
+                    <div className="profile-card-header">
+                      <div className="card-header-left"><Icon name="upload" size={22} /><h3 className="profile-card-title">Upload CV</h3></div>
+                      <span className="skill-count">{profile.resumePath ? 'CV connected' : 'Upload required'}</span>
+                    </div>
+                    <div className="profile-card-body">
+                      <div className="resume-upload-zone">
+                        <div className="upload-icon-container"><Icon name="upload" size={48} /></div>
+                        <h4 className="upload-title">Upload your CV</h4>
+                        <p className="upload-subtitle">PDF, DOC, DOCX or TXT. The system extracts and auto-fills your profile.</p>
+                        <label className={`upload-button ${resumeUploading ? 'disabled' : ''}`}>
+                          <Icon name={resumeUploading ? 'briefcase' : 'upload'} size={18} />
+                          {resumeUploading ? 'Uploading...' : 'Choose CV'}
+                          <input type="file" accept=".pdf,.doc,.docx,.txt" onChange={handleFileUpload} disabled={resumeUploading || saving} style={{ display: 'none' }} />
+                        </label>
+                        {resumeMessage && <p className="resume-upload-status">{resumeMessage}</p>}
+                      </div>
+                      {profile.resumePath && (
+                        <div className="current-resume">
+                          <Icon name="link" size={16} />
+                          <span>Current CV: {getResumeFileName()}</span>
+                          <span className="resume-date">Used for profile extraction and job matching</span>
+                        </div>
                       )}
                     </div>
-                  )}
+                  </div>
+
+                  <div className="profile-card">
+                    <div className="profile-card-header"><h3 className="profile-card-title">Contact Information</h3></div>
+                    <div className="profile-card-body">
+                      <div className="contact-grid">
+                        {[
+                          ['Email', 'mail', 'email', 'email', 'email'],
+                          ['Phone', 'phone', 'phone', 'tel', 'phone'],
+                          ['Location', 'location', 'location', 'text', 'location'],
+                          ['Website', 'link', 'website', 'text', 'website'],
+                        ].map(([label, icon, key, type, placeholder]) => (
+                          <div className="contact-item" key={key}>
+                            <div className="contact-icon"><Icon name={icon} size={20} /></div>
+                            <div className="contact-content">
+                              <label className="contact-label">{label}</label>
+                              {isEditing ? (
+                                <input
+                                  type={type}
+                                  value={profile[key]}
+                                  onChange={(e) => setProfile((current) => ({ ...current, [key]: e.target.value }))}
+                                  className="profile-input-small"
+                                  placeholder={placeholder}
+                                />
+                              ) : key === 'website' ? (
+                                profile.website ? <a href={profile.website.startsWith('http') ? profile.website : `https://${profile.website}`} className="contact-link" target="_blank" rel="noopener noreferrer">{profile.website}</a> : <p className="contact-value">Not provided</p>
+                              ) : (
+                                <p className="contact-value">{profile[key] || 'Not provided'}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="social-links-section">
+                        <h4 className="section-subtitle">Social Links</h4>
+                        <div className="social-links-grid">
+                          {[
+                            ['linkedin', 'LinkedIn URL', 'linkedin'],
+                            ['github', 'GitHub URL', 'github'],
+                          ].map(([iconName, placeholder, key]) => (
+                            <div className="social-link-item" key={key}>
+                              <div className={`social-icon ${key}`}><Icon name={iconName} size={18} /></div>
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={profile[key]}
+                                  onChange={(e) => setProfile((current) => ({ ...current, [key]: e.target.value }))}
+                                  className="profile-input-small"
+                                  placeholder={placeholder}
+                                />
+                              ) : (
+                                <a href={profile[key] ? (profile[key].startsWith('http') ? profile[key] : `https://${profile[key]}`) : '#'} className="social-link" target="_blank" rel="noopener noreferrer" onClick={(e) => !profile[key] && e.preventDefault()}>
+                                  {profile[key] || 'Not provided'}
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
+              )}
+
+              {activeTab === 'experience' && (
+                <div className="profile-tab-content">
+                  <div className="profile-card">
+                    <div className="profile-card-header">
+                      <div className="card-header-left"><Icon name="briefcase" size={22} /><h3 className="profile-card-title">Work Experience</h3></div>
+                      {isEditing && <button className="add-button" onClick={addExperience}><Icon name="plus" size={18} />Add Experience</button>}
+                    </div>
+                    <div className="profile-card-body">
+                      {profile.experience.length === 0 ? (
+                        <p className="upload-subtitle">No work experience was extracted from the CV yet.</p>
+                      ) : (
+                        <div className="timeline">
+                          {profile.experience.map((exp) => (
+                            <div key={exp.id} className="timeline-item">
+                              <div className="timeline-marker" />
+                              <div className="timeline-content">
+                                {isEditing ? (
+                                  <div className="profile-edit-section">
+                                    <div className="input-row">
+                                      <div className="input-group"><label className="input-label">Job Title</label><input className="profile-input" type="text" value={exp.title} onChange={(e) => updateExperienceItem(exp.id, 'title', e.target.value)} placeholder="e.g. Full Stack Developer" /></div>
+                                      <div className="input-group"><label className="input-label">Company</label><input className="profile-input" type="text" value={exp.company} onChange={(e) => updateExperienceItem(exp.id, 'company', e.target.value)} placeholder="Company name" /></div>
+                                    </div>
+                                    <div className="input-row">
+                                      <div className="input-group"><label className="input-label">Location</label><input className="profile-input" type="text" value={exp.location} onChange={(e) => updateExperienceItem(exp.id, 'location', e.target.value)} placeholder="Location" /></div>
+                                      <div className="input-group"><label className="input-label">Current Role</label><input type="checkbox" checked={Boolean(exp.current)} onChange={(e) => updateExperienceItem(exp.id, 'current', e.target.checked)} style={{ marginTop: 16 }} /> <span style={{ marginLeft: 8 }}>Currently working here</span></div>
+                                    </div>
+                                    <div className="input-row">
+                                      <div className="input-group"><label className="input-label">Start Date</label><input className="profile-input" type="month" value={exp.startDate || ''} onChange={(e) => updateExperienceItem(exp.id, 'startDate', e.target.value)} /></div>
+                                      <div className="input-group"><label className="input-label">End Date</label><input className="profile-input" type="month" value={exp.endDate || ''} onChange={(e) => updateExperienceItem(exp.id, 'endDate', e.target.value)} disabled={exp.current} /></div>
+                                    </div>
+                                    <div className="input-group"><label className="input-label">Description</label><textarea className="profile-textarea" rows={4} value={exp.description} onChange={(e) => updateExperienceItem(exp.id, 'description', e.target.value)} placeholder="Responsibilities, achievements, tools used" /></div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                                      <div className="timeline-date">{formatDateRange(exp.startDate, exp.endDate, exp.current)}</div>
+                                      <button className="delete-button" type="button" onClick={() => removeExperience(exp.id)}><Icon name="trash" size={18} /></button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="timeline-header">
+                                      <div className="timeline-title-group">
+                                        <h4 className="timeline-title">{exp.title || 'Not provided'}</h4>
+                                        <p className="timeline-company">{exp.company || 'Not provided'}</p>
+                                        <p className="timeline-location"><Icon name="location" size={14} />{exp.location || 'Not provided'}</p>
+                                      </div>
+                                    </div>
+                                    <p className="timeline-date">{formatDateRange(exp.startDate, exp.endDate, exp.current)}</p>
+                                    <p className="timeline-description">{exp.description || 'No description provided.'}</p>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'education' && (
+                <div className="profile-tab-content">
+                  <div className="profile-card">
+                    <div className="profile-card-header">
+                      <div className="card-header-left"><Icon name="education" size={22} /><h3 className="profile-card-title">Education</h3></div>
+                      {isEditing && <button className="add-button" onClick={addEducation}><Icon name="plus" size={18} />Add Education</button>}
+                    </div>
+                    <div className="profile-card-body">
+                      {profile.education.length === 0 ? (
+                        <p className="upload-subtitle">No education entries were extracted from the CV yet.</p>
+                      ) : (
+                        <div className="timeline">
+                          {profile.education.map((edu) => (
+                            <div key={edu.id} className="timeline-item education">
+                              <div className="timeline-marker education" />
+                              <div className="timeline-content">
+                                {isEditing ? (
+                                  <div className="profile-edit-section">
+                                    <div className="input-row">
+                                      <div className="input-group"><label className="input-label">Degree</label><input className="profile-input" type="text" value={edu.degree} onChange={(e) => updateEducationItem(edu.id, 'degree', e.target.value)} placeholder="e.g. Diploma in ICT" /></div>
+                                      <div className="input-group"><label className="input-label">Field / Specialization</label><input className="profile-input" type="text" value={edu.field} onChange={(e) => updateEducationItem(edu.id, 'field', e.target.value)} placeholder="e.g. Software Development" /></div>
+                                    </div>
+                                    <div className="input-row">
+                                      <div className="input-group"><label className="input-label">Institution</label><input className="profile-input" type="text" value={edu.school} onChange={(e) => updateEducationItem(edu.id, 'school', e.target.value)} placeholder="Institution name" /></div>
+                                      <div className="input-group"><label className="input-label">Current Study</label><input type="checkbox" checked={Boolean(edu.current)} onChange={(e) => updateEducationItem(edu.id, 'current', e.target.checked)} style={{ marginTop: 16 }} /> <span style={{ marginLeft: 8 }}>Currently studying here</span></div>
+                                    </div>
+                                    <div className="input-row">
+                                      <div className="input-group"><label className="input-label">Start Date</label><input className="profile-input" type="month" value={edu.startDate || ''} onChange={(e) => updateEducationItem(edu.id, 'startDate', e.target.value)} /></div>
+                                      <div className="input-group"><label className="input-label">End Date</label><input className="profile-input" type="month" value={edu.endDate || ''} onChange={(e) => updateEducationItem(edu.id, 'endDate', e.target.value)} disabled={edu.current} /></div>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                                      <div className="timeline-date">{formatDateRange(edu.startDate, edu.endDate, edu.current)}</div>
+                                      <button className="delete-button" type="button" onClick={() => removeEducation(edu.id)}><Icon name="trash" size={18} /></button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="timeline-header">
+                                      <div className="timeline-title-group">
+                                        <h4 className="timeline-title">{edu.degree || 'Not provided'}{edu.field ? ` in ${edu.field}` : ''}</h4>
+                                        <p className="timeline-company">{edu.school || 'Not provided'}</p>
+                                      </div>
+                                    </div>
+                                    <p className="timeline-date">{formatDateRange(edu.startDate, edu.endDate, edu.current)}</p>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'skills' && (
+                <div className="profile-tab-content">
+                  <div className="profile-card">
+                    <div className="profile-card-header">
+                      <div className="card-header-left"><Icon name="award" size={22} /><h3 className="profile-card-title">Skills</h3></div>
+                      <span className="skill-count">{profile.skills.length} skills</span>
+                    </div>
+                    <div className="profile-card-body">
+                      {profile.skills.length === 0 ? (
+                        <p className="upload-subtitle">No skills were extracted from the CV yet.</p>
+                      ) : (
+                        <div className="skills-grid">
+                          {profile.skills.map((skill, index) => (
+                            <div key={`${skill}-${index}`} className="skill-chip">
+                              <span className="skill-name">{skill}</span>
+                              {isEditing && <button onClick={() => removeSkill(skill)} className="skill-remove" type="button"><Icon name="close" size={14} /></button>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {isEditing && (
+                        <div className="add-skill-section">
+                          <input
+                            type="text"
+                            value={newSkill}
+                            onChange={(e) => setNewSkill(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && addSkill()}
+                            className="profile-input"
+                            placeholder="Add a new skill"
+                          />
+                          <button onClick={addSkill} className="add-skill-button" type="button"><Icon name="plus" size={18} />Add Skill</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="profile-card">
+                    <div className="profile-card-header">
+                      <div className="card-header-left"><Icon name="certificate" size={22} /><h3 className="profile-card-title">Certifications</h3></div>
+                      {isEditing && (
+                        <label className="add-button upload-cert-label">
+                          <Icon name="plus" size={18} />Upload Certificate
+                          <input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onChange={handleCertificateUpload} style={{ display: 'none' }} />
+                        </label>
+                      )}
+                    </div>
+                    <div className="profile-card-body">
+                      {profile.certifications.length === 0 ? (
+                        <p className="upload-subtitle">No certifications uploaded yet.</p>
+                      ) : (
+                        <div className="certifications-list">
+                          {profile.certifications.map((cert, index) => (
+                            <div key={cert.id || `${cert.name}-${index}`} className="certification-item">
+                              <div className="certification-icon"><Icon name="certificate" size={24} /></div>
+                              <div className="certification-content">
+                                <h4 className="certification-name">{cert.name || 'Not provided'}</h4>
+                                <p className="certification-issuer">{cert.issuer || 'Not provided'}</p>
+                                {cert.path ? <a href={cert.path} target="_blank" rel="noopener noreferrer">Download</a> : <p className="certification-date">{cert.date ? `Issued ${cert.date}` : 'Issued date not provided'}</p>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="profile-card">
+                    <div className="profile-card-header"><h3 className="profile-card-title">Projects & Portfolio</h3></div>
+                    <div className="profile-card-body">
+                      {profile.projects.length === 0 ? (
+                        <p className="upload-subtitle">No projects were extracted from the CV yet.</p>
+                      ) : (
+                        <div className="certifications-list">
+                          {profile.projects.map((project, index) => (
+                            <div key={project.id || `${project.name}-${index}`} className="certification-item">
+                              <div className="certification-icon"><Icon name="link" size={24} /></div>
+                              <div className="certification-content">
+                                <h4 className="certification-name">{project.name || 'Not provided'}</h4>
+                                <p className="certification-issuer">{project.link || 'No link extracted'}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="profile-card">
+                    <div className="profile-card-header"><h3 className="profile-card-title">Languages</h3></div>
+                    <div className="profile-card-body">
+                      {profile.languages.length === 0 ? (
+                        <p className="upload-subtitle">No languages were extracted from the CV yet.</p>
+                      ) : (
+                        <div className="skills-grid">
+                          {profile.languages.map((language, index) => (
+                            <div key={language.id || `${language.name}-${index}`} className="skill-chip">
+                              <span className="skill-name">{language.name || 'Not provided'}{language.proficiency ? ` • ${language.proficiency}` : ''}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="profile-card">
+                    <div className="profile-card-header">
+                      <div className="card-header-left"><Icon name="sparkles" size={22} /><h3 className="profile-card-title">Gemini CV Optimization</h3></div>
+                      <span className="skill-count">AI rewrite help</span>
+                    </div>
+                    <div className="profile-card-body">
+                      <p className="upload-subtitle" style={{ marginTop: 0 }}>Improve one section at a time with ATS-friendly wording and role-specific keywords.</p>
+                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                        {['summary', 'skills', 'experience'].map((section) => (
+                          <button
+                            key={section}
+                            type="button"
+                            className={`profile-action-button ${cvOptimizationSection === section ? 'save' : 'edit'}`}
+                            onClick={() => handleOptimizeCvSection(section)}
+                            disabled={cvOptimizing}
+                          >
+                            {cvOptimizing && cvOptimizationSection === section ? `Optimizing ${section}...` : `Optimize ${section}`}
+                          </button>
+                        ))}
+                      </div>
+
+                      {(cvOptimizationResult || cvOptimizationMessage) && (
+                        <div style={{ background: 'rgba(14,165,233,0.06)', borderRadius: '16px', padding: '16px' }}>
+                          <h4 style={{ marginTop: 0, marginBottom: '10px' }}>Suggested {cvOptimizationSection.charAt(0).toUpperCase() + cvOptimizationSection.slice(1)}</h4>
+                          {cvOptimizationMessage && <p style={{ color: '#b91c1c' }}>{cvOptimizationMessage}</p>}
+                          {cvOptimizationResult && <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit', lineHeight: 1.6 }}>{cvOptimizationResult}</pre>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
