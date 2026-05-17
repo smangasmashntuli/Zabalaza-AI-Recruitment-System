@@ -46,6 +46,7 @@ class CandidateUpdate(BaseModel):
     last_name: Optional[str] = None
     title: Optional[str] = None
     bio: Optional[str] = None
+    cover_letter: Optional[str] = None
     phone: Optional[str] = None
     location: Optional[str] = None
     website: Optional[str] = None
@@ -81,6 +82,7 @@ class Candidate(CandidateInDBBase):
     email: Optional[str] = None
     title: Optional[str] = None
     bio: Optional[str] = None
+    cover_letter: Optional[str] = None
     website: Optional[str] = None
     linkedin: Optional[str] = None
     github: Optional[str] = None
@@ -146,6 +148,7 @@ class CareerPathResponse(BaseModel):
     career_path: str
     learning_recommendations: Optional[List[str]] = None
     next_roles: Optional[List[str]] = None
+    trending_skills: Optional[List[str]] = None
 
 
 class ChatMessage(BaseModel):
