@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from ..core.dependencies import get_db
 from ..core.security import verify_password, get_password_hash, create_access_token, create_refresh_token
@@ -26,27 +27,40 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
             detail="Username already taken"
         )
 
-    # Create new user
-    hashed_password = get_password_hash(user_data.password)
-    user = User(
-        email=user_data.email,
-        username=user_data.username,
-        full_name=user_data.full_name,
-        hashed_password=hashed_password,
-        role=user_data.role
-    )
+    try:
+        # Create new user
+        hashed_password = get_password_hash(user_data.password)
+        user = User(
+            email=user_data.email,
+            username=user_data.username,
+            full_name=user_data.full_name,
+            hashed_password=hashed_password,
+            role=user_data.role
+        )
 
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    # If candidate, create candidate profile
-    if user.role == UserRole.CANDIDATE:
-        candidate = Candidate(user_id=user.id)
-        db.add(candidate)
+        db.add(user)
         db.commit()
+        db.refresh(user)
 
-    return user
+        # If candidate, create candidate profile
+        if user.role == UserRole.CANDIDATE:
+            candidate = Candidate(user_id=user.id)
+            db.add(candidate)
+            db.commit()
+
+        return user
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User with provided email or username already exists"
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error while creating user"
+        )
 
 
 @router.post("/login", response_model=Token)
@@ -79,4 +93,3 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         "refresh_token": refresh_token,
         "token_type": "bearer"
     }
-
