@@ -16,6 +16,7 @@ const createEmptyProfile = () => ({
   location: '',
   title: '',
   bio: '',
+  coverLetter: '',
   website: '',
   linkedin: '',
   github: '',
@@ -191,6 +192,7 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
     location: data.location || '',
     title: data.title || '',
     bio: data.bio || '',
+    coverLetter: data.cover_letter || data.coverLetter || '',
     website: data.website || '',
     linkedin: data.linkedin || '',
     github: data.github || '',
@@ -296,6 +298,7 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
         location: profile.location,
         title: profile.title,
         bio: profile.bio,
+        cover_letter: profile.coverLetter,
         website: profile.website,
         linkedin: profile.linkedin,
         github: profile.github,
@@ -537,6 +540,33 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
                       </div>
                     </div>
                   )}
+
+                  <div className="profile-card">
+                    <div className="profile-card-header">
+                      <div className="card-header-left"><Icon name="edit" size={22} /><h3 className="profile-card-title">Cover Letter</h3></div>
+                      <span className="skill-count">{profile.coverLetter ? 'Extracted' : 'Not provided'}</span>
+                    </div>
+                    <div className="profile-card-body">
+                      {isEditing ? (
+                        <div className="profile-edit-section">
+                          <div className="input-group">
+                            <label className="input-label">Cover Letter</label>
+                            <textarea
+                              value={profile.coverLetter}
+                              onChange={(e) => setProfile((current) => ({ ...current, coverLetter: e.target.value }))}
+                              className="profile-textarea"
+                              rows={8}
+                              placeholder="Your extracted cover letter appears here, and you can edit it if needed."
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="profile-bio" style={{ whiteSpace: 'pre-wrap' }}>
+                          {profile.coverLetter || 'No cover letter was extracted from the uploaded CV.'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
 
                   <div className="profile-card">
                     <div className="profile-card-header">
