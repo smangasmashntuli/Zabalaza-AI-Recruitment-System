@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './Applications.css';
 import { getMyApplications } from './api/candidates';
 import { getJob } from './api/jobs';
@@ -15,13 +15,7 @@ export function Applications() {
     offers: { value: 0, change: 0, period: 'active' }
   });
 
-  // Fetch applications on component mount
-  useEffect(() => {
-    fetchApplications();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const fetchApplications = async () => {
+  const fetchApplications = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -73,9 +67,14 @@ export function Applications() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const calculateAnalytics = (apps, rawApps) => {
+  // Fetch applications on component mount
+  useEffect(() => {
+    fetchApplications();
+  }, [fetchApplications]);
+
+  const calculateAnalytics = (apps) => {
     const totalApps = apps.length;
     const interviews = apps.filter(app =>
       app.status === 'interview_scheduled' || app.status === 'interview'
@@ -216,11 +215,8 @@ export function Applications() {
   if (loading && applications.length === 0) {
     return (
       <div className="applications-view">
-        <div className="applications-state">
-          <div className="applications-state-icon">
-            <Icon name="chart" size={28} />
-          </div>
-          <h2 className="applications-state-title">Loading applications...</h2>
+        <div style={{ textAlign: 'center', padding: '100px 20px' }}>
+          <h2>Loading applications...</h2>
           <div className="spinner"></div>
         </div>
       </div>
@@ -231,13 +227,21 @@ export function Applications() {
   if (error && applications.length === 0) {
     return (
       <div className="applications-view">
-        <div className="applications-state">
-          <div className="applications-state-icon">
-            <Icon name="briefcase" size={28} />
-          </div>
-          <h2 className="applications-state-title">Error Loading Applications</h2>
-          <p className="applications-state-text applications-state-error">{error}</p>
-          <button onClick={fetchApplications} className="applications-state-button">
+        <div style={{ textAlign: 'center', padding: '100px 20px' }}>
+          <h2>Error Loading Applications</h2>
+          <p style={{ color: '#ef4444', marginBottom: '20px' }}>{error}</p>
+          <button
+            onClick={fetchApplications}
+            style={{
+              padding: '12px 24px',
+              background: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '16px'
+            }}
+          >
             Retry
           </button>
         </div>
@@ -255,15 +259,24 @@ export function Applications() {
             <p className="view-subtitle">Track and manage all your job applications in one place</p>
           </div>
         </div>
-        <div className="applications-state">
-          <div className="applications-state-icon">
-            <Icon name="briefcase" size={30} />
-          </div>
-          <h2 className="applications-state-title">No Applications Yet</h2>
-          <p className="applications-state-text">
+        <div style={{ textAlign: 'center', padding: '100px 20px' }}>
+          <div style={{ fontSize: '64px', marginBottom: '16px' }}>📋</div>
+          <h2 style={{ marginBottom: '8px' }}>No Applications Yet</h2>
+          <p style={{ color: '#6b7280', marginBottom: '24px' }}>
             Start applying to jobs to see them here
           </p>
-          <button onClick={() => window.location.href = '#/jobs'} className="applications-state-button">
+          <button
+            onClick={() => window.location.href = '#/jobs'}
+            style={{
+              padding: '12px 24px',
+              background: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '16px'
+            }}
+          >
             Browse Jobs
           </button>
         </div>
