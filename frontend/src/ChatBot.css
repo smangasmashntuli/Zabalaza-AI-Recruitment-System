@@ -246,6 +246,28 @@
   cursor: not-allowed;
 }
 
+.chatbot-suggestion {
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  color: #0f172a;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.chatbot-suggestion:hover {
+  transform: translateY(-1px);
+  background: #dbeafe;
+}
+
+.chatbot-message p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* Scrollbar styling */
 .chatbot-messages::-webkit-scrollbar {
   width: 6px;
