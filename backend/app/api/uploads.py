@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 import os
 import json
+import re
 from datetime import datetime
 from ..core.dependencies import get_db, get_current_active_user, validate_file_type
 from ..models import User, Candidate
@@ -21,7 +22,96 @@ def _get_effective_content_type(file: UploadFile) -> str:
         return "application/msword"
     if filename.endswith(".docx"):
         return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    if filename.endswith(".txt"):
+        return "text/plain"
     return file.content_type or "application/octet-stream"
+
+
+def _to_profile_month(date_value: str) -> str:
+    """Ensure date values are profile-safe and normalized as YYYY-MM when possible."""
+    if not date_value:
+        return ""
+    clean = str(date_value).strip().lower()
+    if clean in {"present", "current", "now"}:
+        return "present"
+    match = re.search(r"((?:19|20)\d{2})-(\d{2})", clean)
+    if match:
+        return f"{match.group(1)}-{match.group(2)}"
+    year_match = re.search(r"((?:19|20)\d{2})", clean)
+    return f"{year_match.group(1)}-01" if year_match else ""
+
+
+def _normalize_education(items):
+    normalized = []
+    for item in items or []:
+        if isinstance(item, str):
+            normalized.append(
+                {
+                    "degree": item,
+                    "school": "Not provided",
+                    "field": item,
+                    "startDate": "",
+                    "endDate": "",
+                    "current": False,
+                }
+            )
+            continue
+
+        normalized.append(
+            {
+                "degree": item.get("degree") or "Not provided",
+                "school": item.get("school") or item.get("institution") or "Not provided",
+                "field": item.get("field") or item.get("degree") or "",
+                "startDate": _to_profile_month(item.get("startDate") or item.get("year") or ""),
+                "endDate": _to_profile_month(item.get("endDate") or ""),
+                "current": bool(item.get("current", False)),
+            }
+        )
+    return normalized
+
+
+def _normalize_experience(items):
+    normalized = []
+    for item in items or []:
+        if isinstance(item, str):
+            normalized.append(
+                {
+                    "title": item,
+                    "company": "Not provided",
+                    "location": None,
+                    "startDate": "",
+                    "endDate": "",
+                    "current": False,
+                    "description": item,
+                }
+            )
+            continue
+
+        normalized.append(
+            {
+                "title": item.get("title") or item.get("role") or "Not provided",
+                "company": item.get("company") or "Not provided",
+                "location": item.get("location"),
+                "startDate": _to_profile_month(item.get("startDate") or item.get("dates") or ""),
+                "endDate": _to_profile_month(item.get("endDate") or ""),
+                "current": bool(item.get("current", False)),
+                "description": item.get("description") or "",
+            }
+        )
+    return normalized
+
+
+def _extract_social_links(resume_text: str):
+    links = {"github": None, "linkedin": None, "website": None}
+    for url in re.findall(r"https?://[^\s]+", resume_text or "", flags=re.IGNORECASE):
+        low = url.lower()
+        if "github.com" in low and not links["github"]:
+            links["github"] = url
+        elif "linkedin.com" in low and not links["linkedin"]:
+            links["linkedin"] = url
+        elif not links["website"]:
+            links["website"] = url
+    return links
 
 
 @router.post("/resume", response_model=CandidateSchema)
@@ -55,7 +145,7 @@ async def upload_resume(
         )
 
     # Parse resume using AI
-    parsed_data = ai_service.parse_resume(file_content, effective_content_type)
+    parsed_data = ai_service.parse_resume(file_content, effective_content_type, fast_mode=True)
 
     if not parsed_data.get('success'):
         raise HTTPException(
@@ -76,14 +166,23 @@ async def upload_resume(
     with open(file_path, "wb") as f:
         f.write(file_content)
 
+    education_list = _normalize_education(parsed_data.get("education", []))
+    experience_list = _normalize_experience(parsed_data.get("work_experience", []))
+    skills_list = parsed_data.get("skills", []) or []
+    soft_skills = parsed_data.get("soft_skills", []) or []
+    certifications = parsed_data.get("certifications", []) or []
+    projects = parsed_data.get("projects", []) or []
+    languages = parsed_data.get("languages", []) or []
+    validation = parsed_data.get("validation", {}) or {}
+
     # Update candidate profile with parsed data
     candidate.resume_path = file_path
     candidate.resume_text = parsed_data.get('resume_text', '')
-    candidate.skills = json.dumps(parsed_data.get('skills', []))
+    candidate.skills = json.dumps(list(dict.fromkeys(skills_list + soft_skills)))
     candidate.experience_years = parsed_data.get('experience_years', 0.0)
-    candidate.education = json.dumps(parsed_data.get('education', []))
-    candidate.work_experience = json.dumps(parsed_data.get('work_experience', []))
-    candidate.certifications = json.dumps(parsed_data.get('certifications', []))
+    candidate.education = json.dumps(education_list)
+    candidate.work_experience = json.dumps(experience_list)
+    candidate.certifications = json.dumps(certifications)
 
     if parsed_data.get('location'):
         candidate.location = parsed_data.get('location')
@@ -103,6 +202,29 @@ async def upload_resume(
     full_name = parsed_data.get('full_name')
     if full_name:
         current_user.full_name = full_name
+
+    links = _extract_social_links(candidate.resume_text)
+    if links.get("github"):
+        candidate.github = links["github"]
+    if links.get("linkedin"):
+        candidate.linkedin = links["linkedin"]
+    if links.get("website"):
+        candidate.website = links["website"]
+
+    if not candidate.bio and (projects or languages):
+        project_names = [p.get("name", "") for p in projects[:3] if isinstance(p, dict)]
+        language_names = [
+            f"{lang.get('name', 'Unknown')} ({lang.get('proficiency', 'Not provided')})"
+            for lang in languages[:3]
+            if isinstance(lang, dict)
+        ]
+        details = []
+        if project_names:
+            details.append(f"Projects: {', '.join([name for name in project_names if name])}")
+        if language_names:
+            details.append(f"Languages: {', '.join(language_names)}")
+        if details:
+            candidate.bio = " | ".join(details)
 
     # Generate embedding for the candidate
     candidate_dict = {
@@ -165,6 +287,17 @@ async def upload_resume(
         response_data["certifications"] = json.loads(candidate.certifications) if candidate.certifications else []
     except Exception:
         response_data["certifications"] = []
+
+    response_data["projects"] = projects
+    response_data["languages"] = languages
+    response_data["extraction_report"] = {
+        "status": "success",
+        "validation": validation,
+        "missing_fields": validation.get("missing_fields", []),
+        "ambiguous_fields": validation.get("ambiguous_fields", []),
+        "needs_review": validation.get("needs_review", False),
+        "gdpr_notice": "Only profile fields are stored and returned from extracted CV data.",
+    }
 
     response_data["skills"] = candidate.skills
     response_data["education"] = candidate.education
