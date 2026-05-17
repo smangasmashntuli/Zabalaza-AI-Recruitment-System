@@ -1,39 +1,19 @@
 import { API_ENDPOINTS } from './config';
 
-const AUTH_EVENT = 'auth:changed';
+export const AUTH_CHANGED_EVENT = 'auth:changed';
 
-const emitAuthChange = () => {
-  window.dispatchEvent(new Event(AUTH_EVENT));
-};
+const parseApiResponse = async (response) => {
+  const text = await response.text();
 
-const parseTokenPayload = (token) => {
-  if (!token) return null;
-
-  try {
-    const base64Url = token.split('.')[1];
-    if (!base64Url) return null;
-
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-
-    return JSON.parse(jsonPayload);
-  } catch (error) {
-    console.error('Error decoding token:', error);
+  if (!text) {
     return null;
   }
-};
 
-const isTokenExpired = (token) => {
-  const payload = parseTokenPayload(token);
-  if (!payload?.exp) return false;
-
-  const nowInSeconds = Math.floor(Date.now() / 1000);
-  return payload.exp <= nowInSeconds;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
 };
 
 /**
@@ -42,7 +22,7 @@ const isTokenExpired = (token) => {
  */
 export const setCurrentUser = (userData) => {
   localStorage.setItem('user_data', JSON.stringify(userData));
-  emitAuthChange();
+  window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
 };
 
 /**
@@ -65,21 +45,15 @@ export const loginUser = async (email, password) => {
       body: formData,
     });
 
-    // Try to parse the response
-    let data;
-    try {
-      data = await response.json();
-    } catch (parseError) {
-      throw new Error('Server error: Unable to parse response');
-    }
+    const data = await parseApiResponse(response);
 
     if (!response.ok) {
-      const errorMessage = data.detail || data.message || 'Login failed';
+      const errorMessage = data?.detail || data?.message || `Login failed (${response.status})`;
       throw new Error(errorMessage);
     }
 
     // Store tokens in localStorage
-    if (data.access_token) {
+    if (data?.access_token) {
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('refresh_token', data.refresh_token);
       localStorage.setItem('token_type', data.token_type);
@@ -88,14 +62,14 @@ export const loginUser = async (email, password) => {
       if (data.user) {
         setCurrentUser(data.user);
       } else {
-        emitAuthChange();
+        window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
       }
     }
 
     return data;
   } catch (error) {
-    // Check if it's a network error
-    if (error.message === 'Failed to fetch') {
+    // Browser network/CORS failures surface as TypeError in fetch.
+    if (error instanceof TypeError) {
       throw new Error('Cannot connect to server. Please ensure the backend is running on http://localhost:8000');
     }
     throw error;
@@ -117,24 +91,16 @@ export const registerUser = async (userData) => {
       body: JSON.stringify(userData),
     });
 
-    // Try to parse the response
-    let data;
-    try {
-      data = await response.json();
-    } catch (parseError) {
-      throw new Error('Server error: Unable to parse response');
-    }
+    const data = await parseApiResponse(response);
 
     if (!response.ok) {
-      // Extract error message from response
-      const errorMessage = data.detail || data.message || 'Registration failed';
+      const errorMessage = data?.detail || data?.message || `Registration failed (${response.status})`;
       throw new Error(errorMessage);
     }
 
     return data;
   } catch (error) {
-    // Check if it's a network error
-    if (error.message === 'Failed to fetch') {
+    if (error instanceof TypeError) {
       throw new Error('Cannot connect to server. Please ensure the backend is running on http://localhost:8000');
     }
     throw error;
@@ -149,7 +115,7 @@ export const logoutUser = () => {
   localStorage.removeItem('refresh_token');
   localStorage.removeItem('token_type');
   localStorage.removeItem('user_data');
-  emitAuthChange();
+  window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
 };
 
 /**
@@ -157,15 +123,7 @@ export const logoutUser = () => {
  * @returns {string|null} - Access token
  */
 export const getAccessToken = () => {
-  const token = localStorage.getItem('access_token');
-  if (!token) return null;
-
-  if (isTokenExpired(token)) {
-    logoutUser();
-    return null;
-  }
-
-  return token;
+  return localStorage.getItem('access_token');
 };
 
 /**
@@ -192,16 +150,23 @@ export const getCurrentUser = () => {
     }
 
     // Decode JWT token to get user info
-    const payload = parseTokenPayload(token);
-    if (!payload) return null;
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+
+    const payload = JSON.parse(jsonPayload);
 
     // Return user data from token
     return {
       id: payload.sub || payload.user_id,
       email: payload.email,
       username: payload.username || payload.email?.split('@')[0],
-      full_name: payload.full_name || payload.name || payload.username,
-      role: payload.role || 'candidate'
+      full_name: payload.full_name || payload.name || payload.username
     };
   } catch (error) {
     console.error('Error decoding token:', error);
@@ -209,4 +174,3 @@ export const getCurrentUser = () => {
   }
 };
 
-export const AUTH_CHANGED_EVENT = AUTH_EVENT;
