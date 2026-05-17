@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -90,6 +90,9 @@ class Candidate(CandidateInDBBase):
     education_list: Optional[List[Education]] = None
     work_experience_list: Optional[List[WorkExperience]] = None
     certifications: Optional[List[Certification]] = None
+    projects: Optional[List[Dict[str, str]]] = None
+    languages: Optional[List[Dict[str, str]]] = None
+    extraction_report: Optional[Dict[str, Any]] = None
 
 
 class ApplicationBase(BaseModel):
