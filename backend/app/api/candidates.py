@@ -79,6 +79,10 @@ def get_my_profile(
     except:
         candidate_dict["certifications"] = []
 
+    candidate_dict["projects"] = []
+    candidate_dict["languages"] = []
+    candidate_dict["extraction_report"] = None
+
     # Keep original JSON strings for backward compatibility
     candidate_dict["skills"] = candidate.skills
     candidate_dict["education"] = candidate.education
@@ -200,6 +204,10 @@ def update_my_profile(
         candidate_dict["certifications"] = json.loads(candidate.certifications) if candidate.certifications else []
     except:
         candidate_dict["certifications"] = []
+
+    candidate_dict["projects"] = []
+    candidate_dict["languages"] = []
+    candidate_dict["extraction_report"] = None
 
     # Keep original JSON strings
     candidate_dict["skills"] = candidate.skills
