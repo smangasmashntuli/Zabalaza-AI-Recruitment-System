@@ -64,14 +64,6 @@
   /* Typography */
   --font-primary: Aptos, Arial, Helvetica, sans-serif;
   --font-accent: Aptos, Arial, Helvetica, sans-serif;
-
-  /*Font Size*/
-  --font-size-body: 14px;
-  --font-weight-regular: 400;
-  --font-size-heading: 30px;
-  --font-size-subheading: 23px;
-
-
 }
 
 * {
@@ -424,11 +416,11 @@ body {
 }
 
 .search-segment {
-  display: inline-block;
+  flex: 1;
+  display: flex;
   align-items: center;
   gap: var(--space-sm);
-  margin-left: 10px;
-  width: 37%;
+  min-width: 0;
   padding: 0 var(--space-sm);
 }
 
@@ -455,16 +447,13 @@ body {
 .find-jobs-button {
   display: flex;
   align-items: center;
-  justify-content: center;
   padding: var(--space-md) var(--space-lg);
   background: var(--primary-600);
-  text-align: center;
-  width: 20%;
   color: white;
   border: none;
   border-radius: var(--radius-md);
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   font-family: var(--font-primary);
   cursor: pointer;
   transition: all 0.2s;
@@ -744,9 +733,6 @@ body {
   font-family: var(--font-primary);
   cursor: pointer;
   transition: all 0.2s;
-}
-.text-button btn{
-  margin-top: 11px;
 }
 
 .text-button:hover {
