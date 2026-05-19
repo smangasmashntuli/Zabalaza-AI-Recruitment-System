@@ -144,6 +144,15 @@ const normalizeEducation = (list = []) =>
     };
   });
 
+const normalizeProjects = (list = []) =>
+  parseMaybeJson(list).map((item, index) => ({
+    id: item.id || item.uuid || `proj-${index}`,
+    name: item.name || item.title || '',
+    link: item.link || item.url || '',
+    type: item.type || 'project',
+    description: item.description || item.summary || '',
+  }));
+
 const createEmptyExperience = () => ({
   id: `new-exp-${Date.now()}`,
   title: '',
@@ -163,6 +172,14 @@ const createEmptyEducation = () => ({
   startDate: '',
   endDate: '',
   current: false,
+});
+
+const createEmptyProject = () => ({
+  id: `new-proj-${Date.now()}`,
+  name: '',
+  link: '',
+  type: 'project',
+  description: '',
 });
 
 function CandidateProfile({ onClose, onProfileUpdated }) {
@@ -200,7 +217,7 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
     education: normalizeEducation(data.education_list || data.education || []),
     skills: normalizeSkills(data.skills_list || data.skills || []),
     certifications: parseMaybeJson(data.certifications || []),
-    projects: parseMaybeJson(data.projects || []),
+    projects: normalizeProjects(data.projects || []),
     languages: parseMaybeJson(data.languages || []),
     extractionReport: data.extraction_report || null,
     resumePath: data.resume_path || data.resumePath || null,
@@ -236,6 +253,13 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
     setProfile((current) => ({
       ...current,
       education: current.education.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
+    }));
+  };
+
+  const updateProjectItem = (id, field, value) => {
+    setProfile((current) => ({
+      ...current,
+      projects: current.projects.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
     }));
   };
 
@@ -279,10 +303,25 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
     setIsEditing(true);
   };
 
+  const addProject = () => {
+    setProfile((current) => ({
+      ...current,
+      projects: [createEmptyProject(), ...(current.projects || [])],
+    }));
+    setIsEditing(true);
+  };
+
   const removeEducation = (id) => {
     setProfile((current) => ({
       ...current,
       education: current.education.filter((item) => item.id !== id),
+    }));
+  };
+
+  const removeProject = (id) => {
+    setProfile((current) => ({
+      ...current,
+      projects: current.projects.filter((item) => item.id !== id),
     }));
   };
 
@@ -306,6 +345,7 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
         work_experience: profile.experience,
         education: profile.education,
         certifications: profile.certifications,
+        projects: profile.projects,
       });
 
       setIsEditing(false);
@@ -843,6 +883,13 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
                   <div className="profile-card">
                     <div className="profile-card-header"><h3 className="profile-card-title">Projects & Portfolio</h3></div>
                     <div className="profile-card-body">
+                      {isEditing && (
+                        <div style={{ marginBottom: 16 }}>
+                          <button type="button" className="add-button" onClick={addProject}>
+                            <Icon name="plus" size={18} />Add Project
+                          </button>
+                        </div>
+                      )}
                       {profile.projects.length === 0 ? (
                         <p className="upload-subtitle">No projects were extracted from the CV yet.</p>
                       ) : (
@@ -851,8 +898,25 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
                             <div key={project.id || `${project.name}-${index}`} className="certification-item">
                               <div className="certification-icon"><Icon name="link" size={24} /></div>
                               <div className="certification-content">
-                                <h4 className="certification-name">{project.name || 'Not provided'}</h4>
-                                <p className="certification-issuer">{project.link || 'No link extracted'}</p>
+                                {isEditing ? (
+                                  <div className="profile-edit-section">
+                                    <div className="input-row">
+                                      <div className="input-group"><label className="input-label">Project Name</label><input className="profile-input" type="text" value={project.name || ''} onChange={(e) => updateProjectItem(project.id, 'name', e.target.value)} placeholder="Project title" /></div>
+                                      <div className="input-group"><label className="input-label">Project Link</label><input className="profile-input" type="text" value={project.link || ''} onChange={(e) => updateProjectItem(project.id, 'link', e.target.value)} placeholder="GitHub / portfolio link" /></div>
+                                    </div>
+                                    <div className="input-row">
+                                      <div className="input-group"><label className="input-label">Type</label><input className="profile-input" type="text" value={project.type || 'project'} onChange={(e) => updateProjectItem(project.id, 'type', e.target.value)} placeholder="project / publication" /></div>
+                                      <div className="input-group"><label className="input-label">Description</label><textarea className="profile-textarea" rows={3} value={project.description || ''} onChange={(e) => updateProjectItem(project.id, 'description', e.target.value)} placeholder="What did you build?" /></div>
+                                    </div>
+                                    <button type="button" className="delete-button" onClick={() => removeProject(project.id)}><Icon name="trash" size={18} /></button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <h4 className="certification-name">{project.name || 'Not provided'}</h4>
+                                    <p className="certification-issuer">{project.link || 'No link extracted'}</p>
+                                    {project.description && <p className="timeline-description">{project.description}</p>}
+                                  </>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -886,15 +950,21 @@ function CandidateProfile({ onClose, onProfileUpdated }) {
                     <div className="profile-card-body">
                       <p className="upload-subtitle" style={{ marginTop: 0 }}>Improve one section at a time with ATS-friendly wording and role-specific keywords.</p>
                       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '16px' }}>
-                        {['summary', 'skills', 'experience'].map((section) => (
+                        {['summary', 'skills', 'experience', 'cover_letter'].map((section) => (
                           <button
                             key={section}
                             type="button"
-                            className={`profile-action-button ${cvOptimizationSection === section ? 'save' : 'edit'}`}
+                            className="cv-optimize-button"
                             onClick={() => handleOptimizeCvSection(section)}
                             disabled={cvOptimizing}
                           >
-                            {cvOptimizing && cvOptimizationSection === section ? `Optimizing ${section}...` : `Optimize ${section}`}
+                            {cvOptimizing && cvOptimizationSection === section
+                              ? `Optimizing ${section}...`
+                              : section === 'cover_letter'
+                                ? 'Cover Letter Enhancement'
+                                : section === 'summary'
+                                  ? 'Resume Improvement'
+                                  : `Optimize ${section}`}
                           </button>
                         ))}
                       </div>
