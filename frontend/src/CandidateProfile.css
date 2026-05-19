@@ -1,3 +1,12 @@
+/* Local defaults for typography variables used in this stylesheet */
+:root {
+  --font-size-body: 16px;
+  --font-size-heading: 32px;
+  --font-size-subheading: 20px;
+  --font-weight-regular: 400;
+  --font-family-primary: Aptos, Arial, Helvetica, sans-serif;
+}
+
 /* Modal Overlay */
 .profile-modal-overlay {
   position: fixed;
@@ -376,32 +385,31 @@
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.2px;
-  border: 1px solid transparent;
-  transition: all 0.18s ease;
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+  transition: none;
 }
 
 .cv-optimize-button.edit {
-  background: #ffffff;
-  color: #0f172a;
-  border-color: #e6eef9;
-}
-
-.cv-optimize-button.edit:hover {
-  background: #f8fafc;
-  transform: translateY(-2px);
-  border-color: #cfe6ff;
-  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
 }
 
 .cv-optimize-button.save {
   background: #0ea5e9;
   color: white;
+  border-color: #0ea5e9;
 }
 
-.cv-optimize-button.save:hover {
-  background: #0284c7;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(14, 165, 233, 0.18);
+.cv-optimize-button:hover,
+.cv-optimize-button:focus,
+.cv-optimize-button:active {
+  background: #2563eb;
+  color: #ffffff;
+  transform: none;
+  box-shadow: none;
 }
 
 .skill-count {
