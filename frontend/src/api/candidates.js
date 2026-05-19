@@ -1,4 +1,4 @@
-import { get, post, put } from './client';
+import { get, post, put, del } from './client';
 import { API_ENDPOINTS } from './config';
 
 /**
@@ -14,18 +14,6 @@ export const getCandidateProfile = async () => {
  */
 export const updateCandidateProfile = async (profileData) => {
   return put(`${API_ENDPOINTS.CANDIDATES}/me`, profileData);
-};
-
-/**
- * Get job matches for current candidate
- */
-export const getJobMatches = async (topK = 10) => {
-  const res = await get(`${API_ENDPOINTS.CANDIDATES}/me/matches?top_k=${topK}`);
-  // Backwards compatible: if API returns wrapper { items, insights } return items by default
-  if (res && typeof res === 'object' && Array.isArray(res.items)) {
-    return res.items;
-  }
-  return res;
 };
 
 /**
@@ -78,10 +66,21 @@ export const getProfileImprovementTips = async () => {
 };
 
 /**
+ * Get orchestrated context for a job action button
+ */
+export const getButtonContext = async (buttonType, jobData) => {
+  return post(`${API_ENDPOINTS.CANDIDATES}/me/button-context`, {
+    button_type: buttonType,
+    job_id: jobData?.job_id || jobData?.id,
+    job_data: jobData,
+  });
+};
+
+/**
  * Chat with Gemini career advisor
  */
-export const chatWithGemini = async (message, history = null) => {
-  return post(`${API_ENDPOINTS.CANDIDATES}/me/chat`, { message, history });
+export const chatWithGemini = async (message, history = null, context = null) => {
+  return post(`${API_ENDPOINTS.CANDIDATES}/me/chat`, { message, history, context });
 };
 
 /**
@@ -89,6 +88,26 @@ export const chatWithGemini = async (message, history = null) => {
  */
 export const applyForJob = async (applicationData) => {
   return post(`${API_ENDPOINTS.CANDIDATES}/me/applications`, applicationData);
+};
+
+export const saveJob = async (jobId) => {
+  return post(`${API_ENDPOINTS.CANDIDATES}/me/saved-jobs`, { job_id: jobId });
+};
+
+export const getSavedJobs = async () => {
+  return get(`${API_ENDPOINTS.CANDIDATES}/me/saved-jobs`);
+};
+
+export const removeSavedJob = async (jobId) => {
+  return del(`${API_ENDPOINTS.CANDIDATES}/me/saved-jobs/${jobId}`);
+};
+
+export const getNotifications = async () => {
+  return get(`${API_ENDPOINTS.CANDIDATES}/me/notifications`);
+};
+
+export const markNotificationRead = async (notificationId) => {
+  return put(`${API_ENDPOINTS.CANDIDATES}/me/notifications/${notificationId}/read`, {});
 };
 
 /**
