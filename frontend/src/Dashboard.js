@@ -2,12 +2,17 @@ import React, { useState, useEffect } from 'react';
 import './Dashboard.css';
 import CandidateProfile from './CandidateProfile';
 import { getCandidateProfile, getMyApplications, getJobMatchesWithInsights, getCareerPath, getProfileImprovementTips, applyForJob } from './api/candidates';
+import { getNotifications } from './api/candidates';
 import { getJobs } from './api/jobs';
+import { getDiscoverIntelligence } from './api/intelligence';
 import { getCurrentUser } from './api/auth';
 import { calculateAnalytics, generateInsights, calculateProfileCompletion } from './api/analytics';
 import { formatApplication, formatRecommendation, getUserInitials } from './utils/formatters';
 import JobPortal from "./JobPortal";
 import { Applications } from "./Applications";
+import SavedJobs from './SavedJobs';
+import NotificationsPanel from './Notifications';
+import Settings from './Settings';
 
 function Dashboard({ onLogout }) {
   const [activeView, setActiveView] = useState('overview');
@@ -20,8 +25,11 @@ function Dashboard({ onLogout }) {
   const [careerPath, setCareerPath] = useState(null);
   const [careerPathNextRoles, setCareerPathNextRoles] = useState([]);
   const [careerPathSkills, setCareerPathSkills] = useState([]);
+  const [careerPathTrendingSkills, setCareerPathTrendingSkills] = useState([]);
   const [profileImprovementTips, setProfileImprovementTips] = useState('');
   const [improvementTipsLoading, setImprovementTipsLoading] = useState(false);
+  const [discoverData, setDiscoverData] = useState(null);
+  const [notifications, setNotifications] = useState([]);
 
   // Dynamic data state
   const [loading, setLoading] = useState(true);
@@ -82,6 +90,15 @@ function Dashboard({ onLogout }) {
             strengths: match.strengths || [],
           })
         );
+
+          // Fetch live discover intelligence (CV-grounded + market data)
+          try {
+            const discoverResp = await getDiscoverIntelligence();
+            setDiscoverData(discoverResp || null);
+          } catch (discoverErr) {
+            console.warn('Could not fetch discover intelligence:', discoverErr);
+            setDiscoverData(null);
+          }
         setRecommendations(formattedMatches);
 
         // If the API returned an insights string, add it to the dashboard insights
@@ -98,6 +115,7 @@ function Dashboard({ onLogout }) {
           setCareerPath(careerResp?.career_path || matchesResp?.career_path || null);
           setCareerPathNextRoles(Array.isArray(careerResp?.next_roles) ? careerResp.next_roles : []);
           setCareerPathSkills(Array.isArray(careerResp?.learning_recommendations) ? careerResp.learning_recommendations : []);
+          setCareerPathTrendingSkills(Array.isArray(careerResp?.trending_skills) ? careerResp.trending_skills : []);
         } catch (careerErr) {
           if (!matchesResp?.career_path) {
             console.warn('Could not fetch career path guidance:', careerErr);
@@ -114,6 +132,14 @@ function Dashboard({ onLogout }) {
         } finally {
           setImprovementTipsLoading(false);
         }
+
+          try {
+            const notificationsData = await getNotifications();
+            setNotifications(Array.isArray(notificationsData) ? notificationsData : []);
+          } catch (notificationErr) {
+            console.warn('Could not fetch notifications:', notificationErr);
+            setNotifications([]);
+          }
       } catch (err) {
         console.warn('Could not fetch job matches:', err);
         setRecommendations([]);
@@ -243,16 +269,44 @@ function Dashboard({ onLogout }) {
     },
   ];
 
-  const dynamicNotificationCount =
-    insights.length +
-    profileChecklist.filter((item) => !item.completed).length +
-    (recommendations.length > 0 ? 1 : 0);
+  const dynamicNotificationCount = notifications.filter((notification) => !notification.is_read).length;
 
   const businessActions = [
-    { label: 'Post a job', description: 'Recruiters can publish a new opening on Career Hub.' },
-    { label: 'Create a Company Page', description: 'Create a company page and submit it for verification.' },
-    { label: 'Hire on Career Hub', description: 'Start the hiring workflow and manage applicants.' },
+    ...(discoverData?.discover?.job_suggestions?.title ? [{
+      label: discoverData.discover.job_suggestions.title,
+      description: discoverData.discover.job_suggestions.description || 'Live recommendation from your career intelligence layer.',
+    }] : []),
+    ...(discoverData?.discover?.industry_trends?.title ? [{
+      label: discoverData.discover.industry_trends.title,
+      description: discoverData.discover.industry_trends.description || 'Current market signals from your field.',
+    }] : []),
+    ...(discoverData?.news_supported ? [{
+      label: 'Industry News Feed',
+      description: 'Live news results from your configured news provider.',
+    }] : [{
+      label: 'Connect a News API',
+      description: 'To show real-time news here, configure a news provider API key.',
+    }]),
   ];
+
+  useEffect(() => {
+    const refreshNotifications = async () => {
+      try {
+        const notificationsData = await getNotifications();
+        setNotifications(Array.isArray(notificationsData) ? notificationsData : []);
+      } catch {
+        // keep existing state
+      }
+    };
+
+    refreshNotifications();
+    const interval = window.setInterval(refreshNotifications, 60000);
+    window.addEventListener('focus', refreshNotifications);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshNotifications);
+    };
+  }, []);
 
   const candidateSkills = candidateProfile?.skills_list || [];
   const topRecommendations = recommendations.slice(0, 3);
@@ -265,24 +319,32 @@ function Dashboard({ onLogout }) {
     }));
 
   const targetCompanies = Array.from(
-    new Set(recommendations.map((job) => job.company).filter(Boolean))
+    new Set([
+      ...(discoverData?.discover?.top_companies || []),
+      ...recommendations.map((job) => job.company).filter(Boolean),
+    ])
   ).slice(0, 4);
 
   const learningRecommendations = careerPathSkills.length > 0
-    ? careerPathSkills.slice(0, 4)
-    : [...new Set(nearMatches.flatMap((job) => job.missingSkills || []))].slice(0, 4);
+    ? [...new Set([...careerPathSkills, ...careerPathTrendingSkills])].slice(0, 5)
+    : [...new Set([...nearMatches.flatMap((job) => job.missingSkills || []), ...careerPathTrendingSkills])].slice(0, 5);
 
   const currentCareerTitle = (candidateProfile?.title || userProfile?.title || '').trim();
+
+  const discoverInsights = discoverData?.discover || null;
 
   const dynamicCareerPaths = (() => {
     const paths = [];
     const nextRoles = Array.isArray(careerPathNextRoles) ? careerPathNextRoles.filter(Boolean) : [];
 
-    if (nextRoles.length > 0) {
-      nextRoles.slice(0, 3).forEach((role, index) => {
+    const discoverNextRoles = Array.isArray(discoverInsights?.career_path?.next_roles) ? discoverInsights.career_path.next_roles.filter(Boolean) : [];
+    const effectiveNextRoles = nextRoles.length > 0 ? nextRoles : discoverNextRoles;
+
+    if (effectiveNextRoles.length > 0) {
+      effectiveNextRoles.slice(0, 3).forEach((role, index) => {
         const sourceRole = index === 0
           ? (currentCareerTitle || topRecommendations[0]?.position || '')
-          : (nextRoles[index - 1] || currentCareerTitle || '');
+          : (effectiveNextRoles[index - 1] || currentCareerTitle || '');
         const relatedJob = topRecommendations[index] || topRecommendations[0] || null;
         const focusText = learningRecommendations.length > 0
           ? `Focus areas: ${learningRecommendations.slice(0, 3).join(', ')}`
@@ -315,15 +377,32 @@ function Dashboard({ onLogout }) {
       return paths.filter((item) => item.current || item.next || item.description);
     }
 
+    if (learningRecommendations.length > 0) {
+      paths.push({
+        current: currentCareerTitle || 'Your current role',
+        next: effectiveNextRoles[0] || 'Next target role',
+        description: `Trending skills to learn: ${learningRecommendations.slice(0, 4).join(', ')}`,
+      });
+      return paths;
+    }
+
     return [];
   })();
 
-  const discoverTips = [
-    !candidateProfile?.resume_text && 'Upload your resume to unlock deeper AI matching.',
-    !candidateProfile?.work_experience_list?.length && 'Add work experience to improve role seniority matching.',
-    !candidateProfile?.education_list?.length && 'Include your education details to strengthen academic fit scoring.',
-    candidateSkills.length < 5 && 'Add more skills to improve skill-overlap recommendations.',
-  ].filter(Boolean);
+  const discoverTips = (
+    discoverInsights?.cv_improvements?.query_for_gemini
+      ? [
+          discoverInsights.cv_improvements.description || 'Improve your profile using your uploaded CV.',
+          discoverInsights.industry_trends?.description || 'Review live industry trends to guide your next move.',
+          discoverInsights.job_suggestions?.description || 'Explore jobs that match your profile signal.',
+        ]
+      : [
+          !candidateProfile?.resume_text && 'Upload your resume to unlock deeper AI matching.',
+          !candidateProfile?.work_experience_list?.length && 'Add work experience to improve role seniority matching.',
+          !candidateProfile?.education_list?.length && 'Include your education details to strengthen academic fit scoring.',
+          candidateSkills.length < 5 && 'Add more skills to improve skill-overlap recommendations.',
+        ]
+  ).filter(Boolean);
 
   const handleFindJobs = () => {
     setActiveView('jobs');
@@ -468,7 +547,7 @@ function Dashboard({ onLogout }) {
             {learningRecommendations.length === 0 ? (
               <div className="discover-empty-card compact">
                 <Icon name="bookmark" size={24} />
-                <p>Your profile already covers the main skills in current matches.</p>
+                <p>No gaps detected — we are refreshing your learning focus with trending skills now.</p>
               </div>
             ) : (
               learningRecommendations.map((item) => (
@@ -627,6 +706,13 @@ function Dashboard({ onLogout }) {
                 Applications
               </button>
               <button
+                className={`nav-item ${activeView === 'saved' ? 'active' : ''}`}
+                onClick={() => setActiveView('saved')}
+              >
+                <Icon name="star" size={18} />
+                Saved Jobs
+              </button>
+              <button
                 className={`nav-item ${activeView === 'jobs' ? 'active' : ''}`}
                 onClick={() => setActiveView('jobs')}
               >
@@ -644,11 +730,11 @@ function Dashboard({ onLogout }) {
           </div>
 
           <div className="header-right">
-            <button className="icon-button">
+            <button className="icon-button" onClick={() => setActiveView('notifications')}>
               <Icon name="bell" size={20} />
               {dynamicNotificationCount > 0 && <span className="notification-badge">{dynamicNotificationCount}</span>}
             </button>
-            <button className="icon-button">
+            <button className="icon-button" onClick={() => setActiveView('settings')}>
               <Icon name="settings" size={20} />
             </button>
             <div className="business-menu-wrapper">
@@ -704,6 +790,12 @@ function Dashboard({ onLogout }) {
             />
           ) : activeView === 'applications' ? (
             <Applications />
+          ) : activeView === 'saved' ? (
+            <SavedJobs />
+          ) : activeView === 'notifications' ? (
+            <NotificationsPanel notifications={notifications} onRefresh={fetchDashboardData} />
+          ) : activeView === 'settings' ? (
+            <Settings candidateProfile={candidateProfile} onProfileUpdated={() => fetchDashboardData({ silent: true })} />
           ) : activeView === 'discover' ? (
             renderDiscoverView()
           ) : (
