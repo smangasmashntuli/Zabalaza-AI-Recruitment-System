@@ -1,16 +1,16 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, cast
 import json
 import logging
 from ..core.dependencies import get_db, get_current_active_user
-from ..models import User, Candidate, Application, Job, ApplicationStatus
+from ..models import User, Candidate, Application, Job, ApplicationStatus, SavedJob, Notification
 from ..schemas import (
     Candidate as CandidateSchema,
     CandidateUpdate,
     Application as ApplicationSchema,
     ApplicationCreate,
-    JobMatch,
     MatchesResponse,
     CareerPathResponse,
     ChatRequest,
@@ -20,6 +20,76 @@ from ..services.ai_service import ai_service
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 logger = logging.getLogger(__name__)
+
+
+def _parse_json_list(value):
+    try:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return value
+        parsed = json.loads(value)
+        return parsed if isinstance(parsed, list) else []
+    except Exception:
+        return []
+
+
+def _candidate_payload(candidate: Any, user: Any) -> Dict[str, Any]:
+    data = {
+        "id": candidate.id,
+        "user_id": candidate.user_id,
+        "email": user.email,
+        "first_name": user.first_name or "",
+        "last_name": user.last_name or "",
+        "phone": candidate.phone,
+        "location": candidate.location,
+        "title": candidate.title,
+        "bio": candidate.bio,
+        "cover_letter": candidate.cover_letter,
+        "website": candidate.website,
+        "linkedin": candidate.linkedin,
+        "github": candidate.github,
+        "experience_years": candidate.experience_years,
+        "resume_path": candidate.resume_path,
+        "resume_text": candidate.resume_text,
+        "profile_summary": candidate.profile_summary,
+        "created_at": candidate.created_at,
+        "updated_at": candidate.updated_at,
+        "skills_list": _parse_json_list(candidate.skills),
+        "education_list": _parse_json_list(candidate.education),
+        "work_experience_list": _parse_json_list(candidate.work_experience),
+        "certifications": _parse_json_list(candidate.certifications),
+        "projects": _parse_json_list(candidate.projects),
+        "languages": _parse_json_list(candidate.languages),
+        "extraction_report": None,
+        "skills": candidate.skills,
+        "education": candidate.education,
+        "work_experience": candidate.work_experience,
+    }
+    return data
+
+
+def _ensure_notification(db: Session, candidate_id: Any, type_: str, title: str, message: str, job_id: Optional[int] = None):
+    existing = db.query(Notification).filter(
+        Notification.candidate_id == candidate_id,
+        Notification.type == type_,
+        Notification.title == title,
+        Notification.job_id == job_id,
+    ).first()
+    if existing:
+        return existing
+
+    notification = Notification(
+        candidate_id=candidate_id,
+        type=type_,
+        title=title,
+        message=message,
+        job_id=job_id,
+    )
+    db.add(notification)
+    db.commit()
+    db.refresh(notification)
+    return notification
 
 
 @router.get("/me", response_model=CandidateSchema)
@@ -36,59 +106,7 @@ def get_my_profile(
             detail="Candidate profile not found"
         )
 
-    # Convert to dict and add user info
-    candidate_dict = {
-        "id": candidate.id,
-        "user_id": candidate.user_id,
-        "email": current_user.email,
-        "first_name": current_user.first_name or "",
-        "last_name": current_user.last_name or "",
-        "phone": candidate.phone,
-        "location": candidate.location,
-        "title": candidate.title,
-        "bio": candidate.bio,
-        "website": candidate.website,
-        "linkedin": candidate.linkedin,
-        "github": candidate.github,
-        "experience_years": candidate.experience_years,
-        "resume_path": candidate.resume_path,
-        "resume_text": candidate.resume_text,
-        "profile_summary": candidate.profile_summary,
-        "created_at": candidate.created_at,
-        "updated_at": candidate.updated_at,
-    }
-
-    # Parse JSON fields
-    try:
-        candidate_dict["skills_list"] = json.loads(candidate.skills) if candidate.skills else []
-    except:
-        candidate_dict["skills_list"] = []
-
-    try:
-        candidate_dict["education_list"] = json.loads(candidate.education) if candidate.education else []
-    except:
-        candidate_dict["education_list"] = []
-
-    try:
-        candidate_dict["work_experience_list"] = json.loads(candidate.work_experience) if candidate.work_experience else []
-    except:
-        candidate_dict["work_experience_list"] = []
-
-    try:
-        candidate_dict["certifications"] = json.loads(candidate.certifications) if candidate.certifications else []
-    except:
-        candidate_dict["certifications"] = []
-
-    candidate_dict["projects"] = []
-    candidate_dict["languages"] = []
-    candidate_dict["extraction_report"] = None
-
-    # Keep original JSON strings for backward compatibility
-    candidate_dict["skills"] = candidate.skills
-    candidate_dict["education"] = candidate.education
-    candidate_dict["work_experience"] = candidate.work_experience
-
-    return candidate_dict
+    return _candidate_payload(candidate, current_user)
 
 
 @router.put("/me", response_model=CandidateSchema)
@@ -108,14 +126,23 @@ def update_my_profile(
 
     # Update user fields
     user = db.query(User).filter(User.id == current_user.id).first()
+    name_updated = False
     if candidate_data.first_name is not None:
         user.first_name = candidate_data.first_name
+        name_updated = True
     if candidate_data.last_name is not None:
         user.last_name = candidate_data.last_name
+        name_updated = True
+
+    if name_updated:
         user.full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
 
     # Update candidate fields
-    update_data = candidate_data.dict(exclude_unset=True)
+    update_data = candidate_data.model_dump(exclude_unset=True)
+
+    if 'cover_letter' in update_data and update_data['cover_letter'] is not None:
+        candidate.cover_letter = update_data['cover_letter']
+        del update_data['cover_letter']
 
     # Handle structured data - convert lists to JSON strings
     if 'skills' in update_data and update_data['skills'] is not None:
@@ -123,16 +150,24 @@ def update_my_profile(
         del update_data['skills']
 
     if 'education' in update_data and update_data['education'] is not None:
-        candidate.education = json.dumps([edu.dict() for edu in update_data['education']])
+        candidate.education = json.dumps([edu.model_dump() for edu in update_data['education']])
         del update_data['education']
 
     if 'work_experience' in update_data and update_data['work_experience'] is not None:
-        candidate.work_experience = json.dumps([exp.dict() for exp in update_data['work_experience']])
+        candidate.work_experience = json.dumps([exp.model_dump() for exp in update_data['work_experience']])
         del update_data['work_experience']
 
     if 'certifications' in update_data and update_data['certifications'] is not None:
-        candidate.certifications = json.dumps([cert.dict() for cert in update_data['certifications']])
+        candidate.certifications = json.dumps([cert.model_dump() for cert in update_data['certifications']])
         del update_data['certifications']
+
+    if 'projects' in update_data and update_data['projects'] is not None:
+        candidate.projects = json.dumps(update_data['projects'])
+        del update_data['projects']
+
+    if 'languages' in update_data and update_data['languages'] is not None:
+        candidate.languages = json.dumps(update_data['languages'])
+        del update_data['languages']
 
     # Update simple fields
     for field in ['title', 'bio', 'phone', 'location', 'website', 'linkedin', 'github', 'experience_years']:
@@ -162,59 +197,7 @@ def update_my_profile(
     db.refresh(candidate)
     db.refresh(user)
 
-    # Return the same format as get_my_profile
-    candidate_dict = {
-        "id": candidate.id,
-        "user_id": candidate.user_id,
-        "email": user.email,
-        "first_name": user.first_name or "",
-        "last_name": user.last_name or "",
-        "phone": candidate.phone,
-        "location": candidate.location,
-        "title": candidate.title,
-        "bio": candidate.bio,
-        "website": candidate.website,
-        "linkedin": candidate.linkedin,
-        "github": candidate.github,
-        "experience_years": candidate.experience_years,
-        "resume_path": candidate.resume_path,
-        "resume_text": candidate.resume_text,
-        "profile_summary": candidate.profile_summary,
-        "created_at": candidate.created_at,
-        "updated_at": candidate.updated_at,
-    }
-
-    # Parse JSON fields
-    try:
-        candidate_dict["skills_list"] = json.loads(candidate.skills) if candidate.skills else []
-    except:
-        candidate_dict["skills_list"] = []
-
-    try:
-        candidate_dict["education_list"] = json.loads(candidate.education) if candidate.education else []
-    except:
-        candidate_dict["education_list"] = []
-
-    try:
-        candidate_dict["work_experience_list"] = json.loads(candidate.work_experience) if candidate.work_experience else []
-    except:
-        candidate_dict["work_experience_list"] = []
-
-    try:
-        candidate_dict["certifications"] = json.loads(candidate.certifications) if candidate.certifications else []
-    except:
-        candidate_dict["certifications"] = []
-
-    candidate_dict["projects"] = []
-    candidate_dict["languages"] = []
-    candidate_dict["extraction_report"] = None
-
-    # Keep original JSON strings
-    candidate_dict["skills"] = candidate.skills
-    candidate_dict["education"] = candidate.education
-    candidate_dict["work_experience"] = candidate.work_experience
-
-    return candidate_dict
+    return _candidate_payload(candidate, user)
 
 
 @router.get("/me/matches", response_model=MatchesResponse)
@@ -243,10 +226,14 @@ def get_job_matches(
         )
 
     # Get active jobs
-    jobs = db.query(Job).filter(Job.status == "active").all()
+    jobs = db.query(Job).filter(Job.status == JobStatus.ACTIVE).all()
 
     if not jobs:
-        return []
+        return {
+            'items': [],
+            'insights': 'No active jobs are available right now. Check back soon for new opportunities.',
+            'career_path': None,
+        }
 
     # Convert to dict format
     jobs_dict = []
@@ -441,6 +428,16 @@ def get_interview_tips(
             detail="Job not found"
         )
 
+    application = db.query(Application).filter(
+        Application.job_id == job_id,
+        Application.candidate_id == candidate.id,
+    ).first()
+    if not application or application.status != ApplicationStatus.INTERVIEW:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Interview tips are available only after you've been selected for interview."
+        )
+
     try:
         from ..services.gemini_service import get_gemini_service
         gemini_service = get_gemini_service()
@@ -590,6 +587,15 @@ def apply_for_job(
     db.commit()
     db.refresh(application)
 
+    _ensure_notification(
+        db,
+        candidate.id,
+        "application_follow_up",
+        f"Follow up on {job.title}",
+        "Your application has been submitted. If you do not hear back soon, send a polite follow-up message to the company.",
+        job.id,
+    )
+
     return application
 
 
@@ -612,6 +618,195 @@ def get_my_applications(
     ).all()
 
     return applications
+
+
+@router.get("/me/saved-jobs")
+def get_saved_jobs(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+
+    saved_jobs = []
+    for saved in db.query(SavedJob).filter(SavedJob.candidate_id == candidate.id).order_by(SavedJob.saved_at.desc()).all():
+        job = db.query(Job).filter(Job.id == saved.job_id).first()
+        if not job:
+            continue
+        saved_jobs.append({
+            "saved_job_id": saved.id,
+            "saved_at": saved.saved_at,
+            "job": {
+                "id": job.id,
+                "title": job.title,
+                "description": job.description,
+                "requirements": job.requirements,
+                "location": job.location,
+                "salary_min": job.salary_min,
+                "salary_max": job.salary_max,
+                "job_type": job.job_type,
+                "experience_level": job.experience_level,
+                "company": getattr(job, "company", None),
+                "created_at": job.created_at,
+            }
+        })
+    return saved_jobs
+
+
+@router.post("/me/saved-jobs")
+def save_job_for_current_candidate(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+
+    job_id = payload.get("job_id")
+    if not job_id:
+        raise HTTPException(status_code=400, detail="job_id is required")
+
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    existing = db.query(SavedJob).filter(SavedJob.candidate_id == candidate.id, SavedJob.job_id == job.id).first()
+    if existing:
+        return {"message": "Job already saved", "saved_job_id": existing.id}
+
+    saved_job = SavedJob(candidate_id=candidate.id, job_id=job.id)
+    db.add(saved_job)
+    db.commit()
+    db.refresh(saved_job)
+
+    _ensure_notification(
+        db,
+        candidate.id,
+        "saved_job_reminder",
+        f"Saved job reminder: {job.title}",
+        "Remember to apply for this saved job before the deadline.",
+        job.id,
+    )
+
+    return {"message": "Job saved successfully", "saved_job_id": saved_job.id}
+
+
+@router.delete("/me/saved-jobs/{job_id}")
+def remove_saved_job(
+    job_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+
+    saved = db.query(SavedJob).filter(SavedJob.candidate_id == candidate.id, SavedJob.job_id == job_id).first()
+    if not saved:
+        raise HTTPException(status_code=404, detail="Saved job not found")
+
+    db.delete(saved)
+    db.commit()
+    return {"message": "Saved job removed"}
+
+
+@router.get("/me/notifications")
+def get_candidate_notifications(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+
+    if not (candidate.resume_path or candidate.resume_text):
+        _ensure_notification(
+            db,
+            candidate.id,
+            "update_cv",
+            "Update your CV",
+            "Upload or refresh your resume so we can improve your match quality.",
+            None,
+        )
+
+    active_jobs = db.query(Job).filter(Job.status == JobStatus.ACTIVE).order_by(Job.created_at.desc()).limit(5).all()
+    for job in active_jobs:
+        _ensure_notification(
+            db,
+            candidate.id,
+            "new_job",
+            f"New job: {job.title}",
+            "A new job matching your profile may be worth reviewing.",
+            job.id,
+        )
+
+    if candidate.embedding:
+        try:
+            matches_payload = get_job_matches(3, current_user=current_user, db=db)
+            for match in matches_payload.get("items", []) if isinstance(matches_payload, dict) else []:
+                if (match.get("match_score") or 0) >= 0.7:
+                    _ensure_notification(
+                        db,
+                        candidate.id,
+                        "good_match",
+                        f"Good match: {match.get('job_title', 'role')}",
+                        "You look like a strong fit for this job. Consider applying soon.",
+                        match.get("job_id"),
+                    )
+        except Exception:
+            pass
+
+    for app in db.query(Application).filter(Application.candidate_id == candidate.id).all():
+        job = db.query(Job).filter(Job.id == app.job_id).first()
+        if app.status == ApplicationStatus.PENDING and job:
+            _ensure_notification(
+                db,
+                candidate.id,
+                "follow_up",
+                f"Follow up on {job.title}",
+                "Your application is still pending. A short follow-up message may help.",
+                job.id,
+            )
+
+    notifications = db.query(Notification).filter(Notification.candidate_id == candidate.id).order_by(Notification.created_at.desc()).limit(50).all()
+    return [
+        {
+            "id": item.id,
+            "type": item.type,
+            "title": item.title,
+            "message": item.message,
+            "job_id": item.job_id,
+            "is_read": item.is_read,
+            "created_at": item.created_at,
+            "read_at": item.read_at,
+        }
+        for item in notifications
+    ]
+
+
+@router.put("/me/notifications/{notification_id}/read")
+def mark_notification_read(
+    notification_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+
+    notification = db.query(Notification).filter(
+        Notification.id == notification_id,
+        Notification.candidate_id == candidate.id,
+    ).first()
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    notification.is_read = True
+    notification.read_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"message": "Notification marked as read"}
 
 
 @router.get("/me/match-analysis")
