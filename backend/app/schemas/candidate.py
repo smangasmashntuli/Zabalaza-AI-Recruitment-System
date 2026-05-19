@@ -57,6 +57,9 @@ class CandidateUpdate(BaseModel):
     education: Optional[List[Education]] = None
     work_experience: Optional[List[WorkExperience]] = None
     certifications: Optional[List[Certification]] = None
+    projects: Optional[List[Dict[str, Any]]] = None
+    languages: Optional[List[Dict[str, Any]]] = None
+    extraction_report: Optional[Dict[str, Any]] = None
 
 
 class CandidateInDBBase(CandidateBase):
