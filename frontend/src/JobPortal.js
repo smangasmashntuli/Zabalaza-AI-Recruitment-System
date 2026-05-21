@@ -1,7 +1,19 @@
 import { useEffect, useState } from 'react';
 import './JobPortal.css';
 import { getHybridJobs, searchHybridJobs } from './api/jobs';
-import { applyForJob, getCandidateProfile, getInterviewTips, getMatchAnalysis, getResumeTailoringTips, getProfileImprovementTips } from './api/candidates';
+import {
+  applyForJob,
+  chatWithGemini,
+  getButtonContext,
+  getCandidateProfile,
+  getInterviewTips,
+  getMatchAnalysis,
+  getMyApplications,
+  getResumeTailoringTips,
+  getProfileImprovementTips,
+  getSavedJobs,
+  saveJob,
+} from './api/candidates';
 
 const Icon = ({ name, size = 20 }) => {
   const icons = {
@@ -54,12 +66,23 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
   const [profileImprovementTips, setProfileImprovementTips] = useState('');
   const [improvementLoading, setImprovementLoading] = useState(false);
   const [expandedSection, setExpandedSection] = useState(null);
+  const [myApplications, setMyApplications] = useState([]);
+  const [savedJobs, setSavedJobs] = useState([]);
+  const [savingJobIds, setSavingJobIds] = useState([]);
+  const [actionNotice, setActionNotice] = useState('');
+  const [showMatchModal, setShowMatchModal] = useState(false);
+  const [matchModalData, setMatchModalData] = useState(null);
+  const [matchQuestion, setMatchQuestion] = useState('');
+  const [matchMessages, setMatchMessages] = useState([]);
+  const [matchAsking, setMatchAsking] = useState(false);
 
   const hasResumeProfile = Boolean(candidateProfile?.resume_path || candidateProfile?.resume_text);
 
   useEffect(() => {
     fetchJobsData();
     fetchCandidateData();
+    fetchApplicationsData();
+    fetchSavedJobsData();
   }, []);
 
   useEffect(() => {
@@ -90,6 +113,24 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
       setCandidateProfile(profile);
     } catch (err) {
       setCandidateProfile(null);
+    }
+  };
+
+  const fetchApplicationsData = async () => {
+    try {
+      const applications = await getMyApplications();
+      setMyApplications(Array.isArray(applications) ? applications : []);
+    } catch {
+      setMyApplications([]);
+    }
+  };
+
+  const fetchSavedJobsData = async () => {
+    try {
+      const saved = await getSavedJobs();
+      setSavedJobs(Array.isArray(saved) ? saved : []);
+    } catch {
+      setSavedJobs([]);
     }
   };
 
@@ -163,12 +204,40 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
     setShowApplicationModal(true);
   };
 
+  const getApplicationForJob = (jobId) => myApplications.find((application) => application.job_id === jobId);
+
+  const isInterviewEligible = (jobId) => {
+    const status = getApplicationForJob(jobId)?.status;
+    return ['interview', 'interview_scheduled'].includes(status);
+  };
+
+  const handleSaveJob = async (job) => {
+    const jobId = job.job_id || job.id;
+    if (!jobId) return;
+    try {
+      setActionNotice('');
+      setSavingJobIds((current) => [...new Set([...current, jobId])]);
+      await saveJob(jobId);
+      await fetchSavedJobsData();
+      setActionNotice(`${job.title} saved successfully.`);
+    } catch (err) {
+      setActionNotice(err.message || 'Could not save the job.');
+    } finally {
+      setSavingJobIds((current) => current.filter((id) => id !== jobId));
+    }
+  };
+
   const handleInterviewTips = async () => {
     if (!selectedJob) return;
 
     const jobId = selectedJob.job_id || selectedJob.id;
     if (!jobId || (selectedJob.source && selectedJob.source !== 'internal')) {
       setInterviewTipsError('Interview tips are only available for internal jobs right now.');
+      return;
+    }
+
+    if (!isInterviewEligible(jobId)) {
+      setInterviewTipsError('Interview tips will unlock after you are selected for interview for this job.');
       return;
     }
 
@@ -190,17 +259,30 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
 
     const jobId = selectedJob.job_id || selectedJob.id;
     if (!jobId || (selectedJob.source && selectedJob.source !== 'internal')) {
-      alert('Match details are only available for internal jobs.');
+      setActionNotice('Match details are only available for internal jobs.');
       return;
     }
 
     try {
       setMatchAnalysisLoading(true);
-      const result = await getMatchAnalysis(jobId);
-      setMatchAnalysis(result);
+      const [contextResult, analysisResult] = await Promise.all([
+        getButtonContext('match_details', selectedJob),
+        getMatchAnalysis(jobId),
+      ]);
+      setMatchModalData(contextResult);
+      setMatchAnalysis(analysisResult);
+      setMatchMessages([
+        {
+          role: 'assistant',
+          content: analysisResult?.summary || contextResult?.context || 'Here is your match analysis.',
+        },
+      ]);
+      setMatchQuestion('');
+      setShowMatchModal(true);
       setExpandedSection('match-details');
     } catch (err) {
       setMatchAnalysis({ error: err.message || 'Failed to get match analysis' });
+      setActionNotice(err.message || 'Failed to get match analysis');
     } finally {
       setMatchAnalysisLoading(false);
     }
@@ -211,7 +293,7 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
 
     const jobId = selectedJob.job_id || selectedJob.id;
     if (!jobId || (selectedJob.source && selectedJob.source !== 'internal')) {
-      alert('Resume tailoring is only available for internal jobs.');
+      setActionNotice('Resume tailoring is only available for internal jobs.');
       return;
     }
 
@@ -232,7 +314,7 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
 
     const jobId = selectedJob.job_id || selectedJob.id;
     if (!jobId || (selectedJob.source && selectedJob.source !== 'internal')) {
-      alert('This feature is only available for internal jobs.');
+      setActionNotice('This feature is only available for internal jobs.');
       return;
     }
 
@@ -455,6 +537,7 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
                       <div className="match-header">
                         <h3>How your profile and resume fit this job</h3>
                       </div>
+                      {actionNotice && <p className="details-action-notice">{actionNotice}</p>}
                       <div className="match-actions">
                         <button 
                           className="match-action-button"
@@ -482,13 +565,13 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
                         </button>
                         <button className="match-action-button" onClick={handleInterviewTips} disabled={interviewTipsLoading}>
                           <Icon name="clock" size={18} />
-                          {interviewTipsLoading ? 'Generating tips...' : 'Interview tips'}
+                          {interviewTipsLoading ? 'Generating tips...' : isInterviewEligible(selectedJob.job_id || selectedJob.id) ? 'Interview tips' : 'Locked until interview'}
                         </button>
                       </div>
                     </div>
                   )}
 
-                  {matchAnalysis && matchAnalysis !== null && expandedSection === 'match-details' && !matchAnalysis.error && (
+                  {matchAnalysis && expandedSection === 'match-details' && !matchAnalysis.error && (
                     <div className="details-section" style={{ background: 'rgba(14,165,233,0.06)', borderRadius: '16px', padding: '16px' }}>
                       <h3 className="details-section-title">Match Analysis</h3>
                       <p><strong>Summary:</strong> {matchAnalysis.summary}</p>
@@ -585,7 +668,17 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
                       <Icon name="check" size={18} />
                       Apply
                     </button>
-                    <button className="save-button-large">Save</button>
+                    <button
+                      className="save-button-large"
+                      onClick={() => handleSaveJob(selectedJob)}
+                      disabled={savingJobIds.includes(selectedJob.id) || savingJobIds.includes(selectedJob.job_id)}
+                    >
+                      {savingJobIds.includes(selectedJob.id) || savingJobIds.includes(selectedJob.job_id)
+                        ? 'Saving...'
+                        : savedJobs.some((item) => (item.job?.id || item.job_id) === (selectedJob.id || selectedJob.job_id))
+                          ? 'Saved'
+                          : 'Save'}
+                    </button>
                   </div>
                 </div>
               );
@@ -649,6 +742,94 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
           </div>
         </div>
       )}
+
+      {showMatchModal && selectedJob && matchModalData && (
+        <div className="modal-overlay" onClick={() => setShowMatchModal(false)}>
+          <div className="modal-content application-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-header-content">
+                <div>
+                  <h2 className="modal-job-title">Match details for {selectedJob.title}</h2>
+                  <p className="modal-job-company">Confidence: {Math.round((matchAnalysis?.match_score || matchModalData?.ml_data?.match_score || 0) * 100)}%</p>
+                </div>
+                <button onClick={() => setShowMatchModal(false)} className="close-button">
+                  <Icon name="close" size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="application-form" style={{ gap: '16px' }}>
+              <div className="details-section" style={{ background: 'rgba(14,165,233,0.06)', borderRadius: '16px', padding: '16px' }}>
+                <h3 className="details-section-title">Match Summary</h3>
+                <p style={{ whiteSpace: 'pre-wrap' }}>{matchAnalysis?.summary || matchModalData?.context || 'No summary available.'}</p>
+                {Array.isArray(matchAnalysis?.strengths) && matchAnalysis.strengths.length > 0 && (
+                  <>
+                    <strong>Strengths</strong>
+                    <ul>
+                      {matchAnalysis.strengths.map((item, index) => <li key={index}>{item}</li>)}
+                    </ul>
+                  </>
+                )}
+                {Array.isArray(matchAnalysis?.gaps) && matchAnalysis.gaps.length > 0 && (
+                  <>
+                    <strong>Gaps</strong>
+                    <ul>
+                      {matchAnalysis.gaps.map((item, index) => <li key={index}>{item}</li>)}
+                    </ul>
+                  </>
+                )}
+              </div>
+
+              <div className="details-section" style={{ background: 'rgba(15,23,42,0.03)', borderRadius: '16px', padding: '16px' }}>
+                <h3 className="details-section-title">Ask a follow-up question</h3>
+                <div className="chat-thread" style={{ maxHeight: '260px', overflowY: 'auto', marginBottom: '12px' }}>
+                  {matchMessages.map((msg, idx) => (
+                    <div key={idx} style={{ marginBottom: '10px' }}>
+                      <strong>{msg.role === 'user' ? 'You' : 'Advisor'}:</strong>
+                      <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+                    </div>
+                  ))}
+                </div>
+                <textarea
+                  className="form-textarea"
+                  rows={4}
+                  value={matchQuestion}
+                  onChange={(e) => setMatchQuestion(e.target.value)}
+                  placeholder="Ask anything about this match, your gaps, or how to improve your chances..."
+                />
+                <div className="form-actions" style={{ marginTop: '12px' }}>
+                  <button
+                    type="button"
+                    className="submit-button"
+                    disabled={matchAsking || !matchQuestion.trim()}
+                    onClick={async () => {
+                      try {
+                        setMatchAsking(true);
+                        const nextHistory = matchMessages.map((msg) => ({
+                          user: msg.role === 'user' ? msg.content : undefined,
+                          assistant: msg.role === 'assistant' ? msg.content : undefined,
+                        }));
+                        setMatchMessages((current) => [...current, { role: 'user', content: matchQuestion.trim() }]);
+                        const response = await chatWithGemini(matchQuestion.trim(), nextHistory, matchModalData?.context || matchModalData?.query);
+                        setMatchMessages((current) => [...current, { role: 'assistant', content: response?.response || 'No response returned.' }]);
+                        setMatchQuestion('');
+                      } catch (err) {
+                        setMatchMessages((current) => [...current, { role: 'assistant', content: err.message || 'Failed to answer question.' }]);
+                      } finally {
+                        setMatchAsking(false);
+                      }
+                    }}
+                  >
+                    {matchAsking ? 'Thinking...' : 'Ask'}
+                  </button>
+                  <button type="button" onClick={() => setShowMatchModal(false)} className="cancel-button">Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
