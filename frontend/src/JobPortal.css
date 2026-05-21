@@ -84,7 +84,7 @@
   border: none;
   background: transparent;
   outline: none;
-  font-size: 14px;
+  font-size: 13px;
   color: #000;
 }
 
@@ -95,59 +95,52 @@
 .jobs-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 0;
+  padding: 0;
   margin: 0;
-  background: #fafafa;
 }
 
 .no-jobs-message {
   padding: 40px 16px;
   text-align: center;
   color: #999;
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .jobs-list-item {
-  padding: 16px 14px;
-  margin: 12px 8px;
-  border: 1px solid #e0e0e0;
-  border-radius: 10px;
+  padding: 12px 12px;
+  margin: 4px 8px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
-  border-left: 4px solid transparent;
-  background: white;
+  transition: background-color 0.2s;
+  border-left: 3px solid transparent;
 }
 
 .jobs-list-item:hover {
-  background-color: #f8f8f8;
-  border: 1px solid #d0d0d0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background-color: #f5f5f5;
 }
 
 .jobs-list-item.active {
   background-color: #e8f1ff;
-  border: 1px solid #0a66c2;
   border-left-color: #0a66c2;
-  box-shadow: 0 4px 12px rgba(10, 102, 194, 0.15);
 }
 
 .list-item-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
 .list-item-logo {
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   background: #eff6ff;
-  border-radius: 8px;
+  border-radius: 6px;
   display: grid;
   place-items: center;
   color: #2563eb;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 12px;
   flex-shrink: 0;
 }
 
@@ -157,23 +150,20 @@
 }
 
 .list-item-title {
-  font-weight: 700;
-  font-size: 15px;
+  font-weight: 600;
+  font-size: 13px;
   color: #000;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin: 0;
-  line-height: 1.3;
 }
 
 .list-item-company {
-  font-size: 14px;
+  font-size: 12px;
   color: #666;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin: 4px 0 0 0;
 }
 
 .close-item-button {
@@ -193,11 +183,10 @@
 
 .list-item-details {
   display: flex;
-  gap: 10px;
-  font-size: 13px;
+  gap: 8px;
+  font-size: 12px;
   color: #666;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
+  margin-bottom: 6px;
 }
 
 .list-detail {
@@ -207,16 +196,16 @@
 }
 
 .list-item-meta {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .list-meta-badge {
   display: inline-block;
   background: #e8e8e8;
   color: #666;
-  border-radius: 14px;
-  padding: 4px 10px;
-  font-size: 12px;
+  border-radius: 12px;
+  padding: 3px 8px;
+  font-size: 11px;
   font-weight: 500;
 }
 
@@ -333,8 +322,8 @@
 }
 
 .details-job-title {
-  margin: 0 0 16px;
-  font-size: 32px;
+  margin: 0 0 12px;
+  font-size: 28px;
   font-weight: 700;
   color: #000;
   line-height: 1.2;
@@ -342,8 +331,8 @@
 
 .details-badges-row {
   display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 10px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
 }
 
@@ -353,9 +342,9 @@
   gap: 6px;
   background: #e8f1ff;
   color: #0a66c2;
-  padding: 8px 14px;
+  padding: 6px 12px;
   border-radius: 20px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -417,11 +406,11 @@
   background: #f3f3f3;
   border: 1px solid #d5d5d5;
   border-radius: 8px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  color: #333;
+  color: #666;
   transition: all 0.2s;
 }
 
@@ -436,16 +425,16 @@
 }
 
 .details-section-title {
-  margin: 0 0 14px;
-  font-size: 16px;
-  font-weight: 700;
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
   color: #000;
 }
 
 .details-description {
   margin: 0;
-  font-size: 15px;
-  line-height: 1.7;
+  font-size: 13px;
+  line-height: 1.6;
   color: #333;
 }
 
@@ -457,10 +446,10 @@
 
 .requirement-item {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: flex-start;
-  margin-bottom: 10px;
-  font-size: 15px;
+  margin-bottom: 8px;
+  font-size: 13px;
   color: #333;
 }
 
