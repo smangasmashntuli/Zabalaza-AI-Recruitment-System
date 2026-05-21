@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import json
-from ..core.dependencies import get_db, get_current_recruiter_user
+from ..core.dependencies import get_db, get_current_active_user, get_current_recruiter_user
 from ..models import User, Job, JobStatus, Candidate
 from ..schemas import Job as JobSchema, JobCreate, JobUpdate, JobWithApplications
 from ..services.ai_service import ai_service
@@ -21,10 +21,10 @@ def get_current_user_optional(db: Session = Depends(get_db)):
 @router.post("/", response_model=JobSchema, status_code=status.HTTP_201_CREATED)
 def create_job(
     job_data: JobCreate,
-    current_user: User = Depends(get_current_recruiter_user),
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Create a new job posting (Recruiter/Admin only)."""
+    """Create a new job posting for any authenticated user."""
     # Create job
     job = Job(
         title=job_data.title,
@@ -304,6 +304,4 @@ async def get_available_sources():
             }
         ]
     }
-
-
 
