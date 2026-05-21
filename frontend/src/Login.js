@@ -117,7 +117,9 @@ const Login = ({onSwitchToSignUp}) => {
                             <input type="checkbox" />
                             <span>Remember me</span>
                         </label>
-                        <a href="#" className="forgot-password">Forgot password?</a>
+                        <button type="button" className="forgot-password" style={{ background: 'none', border: 'none', padding: 0 }}>
+                            Forgot password?
+                        </button>
                     </div>
 
                     <button
@@ -129,7 +131,7 @@ const Login = ({onSwitchToSignUp}) => {
                     </button>
                 </form>
                 <div className="login-footer">
-          <p>Don't have an account? <a href="#" onClick={onSwitchToSignUp}>Sign up</a></p>
+          <p>Don't have an account? <button type="button" className="forgot-password" style={{ background: 'none', border: 'none', padding: 0 }} onClick={onSwitchToSignUp}>Sign up</button></p>
         </div>
       </div>
     </div>
