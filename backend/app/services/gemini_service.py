@@ -16,8 +16,8 @@ The LLM adds:
 import os
 import json
 import logging
-from typing import Dict, List, Optional
-from datetime import datetime
+from typing import Dict, List, Optional, Any
+from datetime import datetime, timezone
 
 # Optional local text-generation support via Hugging Face transformers
 try:
@@ -28,6 +28,7 @@ except Exception:
 
 logger = logging.getLogger(__name__)
 
+genai = None
 try:
     import google.generativeai as genai
     GEMINI_AVAILABLE = True
@@ -49,15 +50,30 @@ class GeminiService:
         """
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
         self.model_name = model
+        
+        # DEBUG: Log what we're reading
+        logger.info(f"🔍 DEBUG: GEMINI_API_KEY from env: {bool(os.getenv('GEMINI_API_KEY'))}")
+        logger.info(f"🔍 DEBUG: GEMINI_AVAILABLE: {GEMINI_AVAILABLE}")
+        logger.info(f"🔍 DEBUG: api_key provided to __init__: {bool(api_key)}")
+        logger.info(f"🔍 DEBUG: Final api_key length: {len(self.api_key)} chars")
+        
         self.enabled = GEMINI_AVAILABLE and bool(self.api_key)
 
         if self.enabled:
-            genai.configure(api_key=self.api_key)
-            self.client = genai.GenerativeModel(model_name=self.model_name)
-            logger.info(f"✅ Gemini service initialized with model: {self.model_name}")
+            try:
+                genai.configure(api_key=self.api_key)
+                self.client = genai.GenerativeModel(model_name=self.model_name)
+                logger.info(f"✅ Gemini service initialized with model: {self.model_name}")
+            except Exception as e:
+                logger.error(f"❌ Gemini initialization failed: {type(e).__name__}: {e}")
+                self.enabled = False
+                self.client = None
         else:
             self.client = None
-            logger.warning("⚠️ Gemini service disabled (API key missing or library not installed)")
+            logger.warning(f"⚠️ Gemini service disabled:")
+            logger.warning(f"   - GEMINI_AVAILABLE: {GEMINI_AVAILABLE}")
+            logger.warning(f"   - API key present: {bool(self.api_key)}")
+            logger.warning(f"   - API key length: {len(self.api_key)}")
 
     def generate_match_explanation(
         self,
@@ -246,7 +262,7 @@ Return ONLY the improved text, no explanations.
         required_skills: List[str],
         candidate_skills: List[str],
         candidate_experience_summary: str
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Perform semantic reasoning about job fit.
 
@@ -299,7 +315,7 @@ Return JSON (no markdown, just raw JSON):
 
     def _fallback_job_fit_reasoning(
         self, candidate_skills: List[str], required_skills: List[str]
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Fallback reasoning if Gemini is unavailable."""
         matching = [s for s in candidate_skills if s in required_skills]
         gaps = [s for s in required_skills if s not in candidate_skills]
@@ -564,7 +580,7 @@ KEY PRINCIPLES:
 - Be warm and encouraging while staying honest
 - Always include actionable next steps
 
-CURRENT TIME: {datetime.utcnow().strftime('%Y-%m-%d')}"""
+CURRENT TIME: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"""
 
             # Build context from history
             conversation_context = ""
