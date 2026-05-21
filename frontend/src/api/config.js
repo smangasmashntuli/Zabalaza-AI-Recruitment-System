@@ -11,7 +11,7 @@ export const API_ENDPOINTS = {
   JOBS: `${API_V1}/jobs`,
   MATCHES: `${API_V1}/matches`,
   UPLOADS: `${API_V1}/uploads`,
+  INTELLIGENCE: `${API_V1}/intelligence`,
 };
 
 export { API_BASE_URL };
-export default API_BASE_URL;
