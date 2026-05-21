@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-1.5-flash"
+    NEWSAPI_KEY: str = ""
 
     # Email
     SMTP_HOST: str = "smtp.gmail.com"
