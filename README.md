@@ -8,11 +8,6 @@ An AI-assisted recruitment platform with a FastAPI backend and React frontend th
 - recommends matching jobs from the local database and external job sources,
 - and keeps the UI readable and user-friendly.
 
-## System Architecture
-
-<img width="529" height="569" alt="arch drawio" src="https://github.com/user-attachments/assets/decfd96e-c7bc-4ddd-ae1b-973f82c6d93e" />
-
-
 ## Current Highlights
 
 - **Resume upload and parsing** for PDF, DOC, and DOCX files
@@ -20,7 +15,6 @@ An AI-assisted recruitment platform with a FastAPI backend and React frontend th
 - **Hybrid job search** combining internal jobs with external sources
 - **USAJobs integration** enabled through environment configuration
 - **Readable UI typography** tuned for clarity and accessibility
-- **🧠 Gemini AI Intelligence layer** for smart match explanations, career guidance, and interview prep
 
 ## Architecture
 
@@ -50,19 +44,11 @@ An AI-assisted recruitment platform with a FastAPI backend and React frontend th
 4. Generate an embedding and profile summary
 5. Refresh job recommendations automatically
 
-### AI-Powered Job Matching
+### Job Search and Matching
 - Semantic ranking of jobs against the candidate profile
-- **LLM-generated explanations** — why each job is a good fit
 - Unified results from internal and external sources
 - Internal jobs are prioritized when available
 - Graceful fallback if an external source is unavailable
-
-### Career Intelligence (Gemini AI)
-- **Smart job match explanations** — "You're a strong fit because your React experience aligns with 78% of required skills..."
-- **Career path recommendations** — "Based on your backend experience, transition into DevOps by learning Docker and CI/CD"
-- **Interview preparation tips** — Role-specific interview coaching
-- **CV optimization suggestions** — ATS-friendly section improvements
-- **Skill gap analysis** — Understand what to learn next
 
 ## Technology Stack
 
@@ -74,7 +60,6 @@ An AI-assisted recruitment platform with a FastAPI backend and React frontend th
 - Sentence Transformers
 - scikit-learn
 - python-docx
-- **Google Gemini API** (LLM intelligence layer)
 
 ### Frontend
 - React
@@ -85,7 +70,6 @@ An AI-assisted recruitment platform with a FastAPI backend and React frontend th
 - PyPDF2 / PDF parsing utilities
 - Bcrypt / Passlib for password hashing
 - Requests for HTTP integration tests
-- google-generativeai (Gemini SDK)
 
 ## Prerequisites
 
@@ -135,8 +119,6 @@ Required keys:
 - `USAJOBS_API_KEY`
 - `USAJOBS_USER_EMAIL`
 - `ENABLED_JOB_SOURCES`
-- `GEMINI_API_KEY` (for AI-powered match explanations and career guidance)
-- `GEMINI_MODEL` (optional, defaults to `gemini-1.5-flash`)
 
 Recommended values for hybrid search:
 
@@ -206,10 +188,7 @@ python -c "import requests, json; r=requests.get('http://localhost:8000/api/v1/j
 ### Candidate Profile
 - `GET /api/v1/candidates/me` — Get current candidate profile
 - `PUT /api/v1/candidates/me` — Update current candidate profile
-- `GET /api/v1/candidates/me/matches` — Get AI job matches **with LLM explanations**
-- `GET /api/v1/candidates/me/career-path` — Get AI-powered career path recommendations
-- `POST /api/v1/candidates/me/interview-tips` — Get role-specific interview tips
-- `POST /api/v1/candidates/me/cv-optimization` — Get CV section optimization suggestions
+- `GET /api/v1/candidates/me/matches` — Get AI job matches
 
 ### Resume Upload
 - `POST /api/v1/uploads/resume` — Upload and parse a resume/CV
@@ -264,34 +243,15 @@ MYPROJECT/
 └── test_*.py
 ```
 
-## 🧠 AI Intelligence Layer (Gemini)
-
-The system includes Google Gemini API integration for intelligent, human-readable job matching and career guidance:
-
-### What Gemini Adds
-- **Match Explanations:** Instead of just a score, candidates see "You're a strong fit because your React experience aligns with 78% of required skills..."
-- **Career Guidance:** "Based on your backend experience, transition into DevOps within 6 months by learning Docker and CI/CD pipelines"
-- **Interview Prep:** Role-specific interview preparation tips
-- **CV Optimization:** ATS-friendly suggestions for CV sections
-
-### Configuration
-1. Get a free API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
-2. Add to `.env`:
-   ```dotenv
-   GEMINI_API_KEY=your_api_key_here
-   GEMINI_MODEL=gemini-1.5-flash
-   ```
-3. See [GEMINI_INTEGRATION_GUIDE.md](./GEMINI_INTEGRATION_GUIDE.md) for detailed setup and examples
-
-### Key Principle
-**Gemini enhances, doesn't replace** existing resume parsing, embeddings, and matching logic. It's the "intelligence + personality layer" on top.
-
 ## Notes
 
 - Keep secrets out of source control.
 - External job sources are optional and controlled through `.env`.
 - If an external API fails, the system still returns internal results.
-- Gemini API integration is optional — system gracefully falls back to heuristics if disabled.
+
+## License
+
+MIT License
 
 ## Support
 
