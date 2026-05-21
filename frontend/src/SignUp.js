@@ -8,8 +8,7 @@ const SignUp = ({ onSwitchToLogin }) => {
     username: '',
     email: '',
     password: '',
-    confirmPassword: '',
-    role: 'candidate'
+    confirmPassword: ''
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -91,8 +90,7 @@ const SignUp = ({ onSwitchToLogin }) => {
           email: formData.email,
           username: formData.username,
           full_name: formData.fullName,
-          password: formData.password,
-          role: formData.role
+          password: formData.password
         };
 
         const response = await registerUser(userData);
@@ -105,8 +103,7 @@ const SignUp = ({ onSwitchToLogin }) => {
           username: '',
           email: '',
           password: '',
-          confirmPassword: '',
-          role: 'candidate'
+          confirmPassword: ''
         });
 
         // Switch to login
@@ -213,7 +210,7 @@ const SignUp = ({ onSwitchToLogin }) => {
           <div className="terms-checkbox">
             <label>
               <input type="checkbox" required />
-              <span>I agree to the <a href="#">Terms & Conditions</a></span>
+              <span>I agree to the <span className="terms-link">Terms & Conditions</span></span>
             </label>
           </div>
 
@@ -227,7 +224,7 @@ const SignUp = ({ onSwitchToLogin }) => {
         </form>
 
         <div className="signup-footer">
-          <p>Already have an account? <a href="#" onClick={onSwitchToLogin}>Login</a></p>
+          <p>Already have an account? <button type="button" className="terms-link" onClick={onSwitchToLogin}>Login</button></p>
         </div>
       </div>
     </div>
