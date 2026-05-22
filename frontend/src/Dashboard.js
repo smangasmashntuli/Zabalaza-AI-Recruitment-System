@@ -46,6 +46,25 @@ function Dashboard({ onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const refreshNotifications = async () => {
+      try {
+        const notificationsData = await getNotifications();
+        setNotifications(Array.isArray(notificationsData) ? notificationsData : []);
+      } catch {
+        // keep existing state
+      }
+    };
+
+    refreshNotifications();
+    const interval = window.setInterval(refreshNotifications, 60000);
+    window.addEventListener('focus', refreshNotifications);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshNotifications);
+    };
+  }, []);
+
   const fetchDashboardData = async ({ silent = false } = {}) => {
     try {
       if (!silent) {
@@ -289,24 +308,6 @@ function Dashboard({ onLogout }) {
     }]),
   ];
 
-  useEffect(() => {
-    const refreshNotifications = async () => {
-      try {
-        const notificationsData = await getNotifications();
-        setNotifications(Array.isArray(notificationsData) ? notificationsData : []);
-      } catch {
-        // keep existing state
-      }
-    };
-
-    refreshNotifications();
-    const interval = window.setInterval(refreshNotifications, 60000);
-    window.addEventListener('focus', refreshNotifications);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener('focus', refreshNotifications);
-    };
-  }, []);
 
   const candidateSkills = candidateProfile?.skills_list || [];
   const topRecommendations = recommendations.slice(0, 3);
