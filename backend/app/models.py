@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey, Enum, Boolean
+from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey, Enum, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 import enum
@@ -97,11 +97,14 @@ class Candidate(Base):
     # Professional Info
     resume_path = Column(String(500))
     resume_text = Column(Text)
+    cover_letter = Column(Text)
     skills = Column(Text)  # JSON array of skills
     experience_years = Column(Float)
     education = Column(Text)  # JSON array of education
     work_experience = Column(Text)  # JSON array of work experience
     certifications = Column(Text)  # JSON array of certifications
+    projects = Column(Text)  # JSON array of projects
+    languages = Column(Text)  # JSON array of languages
 
     # AI/ML fields
     embedding = Column(Text)  # JSON string of resume embedding
@@ -113,6 +116,38 @@ class Candidate(Base):
     # Relationships
     user = relationship("User", back_populates="candidate_profile")
     applications = relationship("Application", back_populates="candidate", cascade="all, delete-orphan")
+
+
+class SavedJob(Base):
+    __tablename__ = "saved_jobs"
+    __table_args__ = (
+        UniqueConstraint("candidate_id", "job_id", name="uix_candidate_saved_job"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    candidate_id = Column(Integer, ForeignKey("candidates.id"), nullable=False)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
+    saved_at = Column(DateTime, default=utc_now)
+
+    candidate = relationship("Candidate")
+    job = relationship("Job")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    candidate_id = Column(Integer, ForeignKey("candidates.id"), nullable=False)
+    type = Column(String(50), nullable=False)
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=True)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=utc_now)
+    read_at = Column(DateTime, nullable=True)
+
+    candidate = relationship("Candidate")
+    job = relationship("Job")
 
 
 class Application(Base):
