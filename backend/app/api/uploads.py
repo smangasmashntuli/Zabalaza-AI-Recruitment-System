@@ -8,6 +8,7 @@ from ..core.dependencies import get_db, get_current_active_user, validate_file_t
 from ..models import User, Candidate
 from ..schemas import Candidate as CandidateSchema
 from ..services.ai_service import ai_service
+from ..services.bio_generator import generate_professional_bio
 from ..config import settings
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
@@ -174,15 +175,20 @@ async def upload_resume(
     projects = parsed_data.get("projects", []) or []
     languages = parsed_data.get("languages", []) or []
     validation = parsed_data.get("validation", {}) or {}
+    professional_summary = parsed_data.get("professional_summary") or parsed_data.get("profile_summary") or ""
+    cover_letter_text = parsed_data.get("cover_letter") or ""
 
     # Update candidate profile with parsed data
     candidate.resume_path = file_path
     candidate.resume_text = parsed_data.get('resume_text', '')
+    candidate.cover_letter = cover_letter_text
     candidate.skills = json.dumps(list(dict.fromkeys(skills_list + soft_skills)))
     candidate.experience_years = parsed_data.get('experience_years', 0.0)
     candidate.education = json.dumps(education_list)
     candidate.work_experience = json.dumps(experience_list)
     candidate.certifications = json.dumps(certifications)
+    candidate.projects = json.dumps(projects)
+    candidate.languages = json.dumps(languages)
 
     if parsed_data.get('location'):
         candidate.location = parsed_data.get('location')
@@ -211,20 +217,20 @@ async def upload_resume(
     if links.get("website"):
         candidate.website = links["website"]
 
-    if not candidate.bio and (projects or languages):
-        project_names = [p.get("name", "") for p in projects[:3] if isinstance(p, dict)]
-        language_names = [
-            f"{lang.get('name', 'Unknown')} ({lang.get('proficiency', 'Not provided')})"
-            for lang in languages[:3]
-            if isinstance(lang, dict)
-        ]
-        details = []
-        if project_names:
-            details.append(f"Projects: {', '.join([name for name in project_names if name])}")
-        if language_names:
-            details.append(f"Languages: {', '.join(language_names)}")
-        if details:
-            candidate.bio = " | ".join(details)
+    generated_bio = generate_professional_bio(
+        title=candidate.title or parsed_data.get('title'),
+        experience_years=candidate.experience_years,
+        skills=skills_list,
+        work_experience=experience_list,
+        education=education_list,
+        resume_text=candidate.resume_text or parsed_data.get('resume_text', ''),
+        cover_letter=cover_letter_text,
+    )
+
+    if generated_bio:
+        candidate.bio = generated_bio
+    elif professional_summary:
+        candidate.bio = professional_summary
 
     # Generate embedding for the candidate
     candidate_dict = {
@@ -263,9 +269,12 @@ async def upload_resume(
         "experience_years": candidate.experience_years,
         "resume_path": candidate.resume_path,
         "resume_text": candidate.resume_text,
+        "cover_letter": candidate.cover_letter,
         "profile_summary": candidate.profile_summary,
         "created_at": candidate.created_at,
         "updated_at": candidate.updated_at,
+        "projects": projects,
+        "languages": languages,
     }
 
     try:
@@ -302,6 +311,7 @@ async def upload_resume(
     response_data["skills"] = candidate.skills
     response_data["education"] = candidate.education
     response_data["work_experience"] = candidate.work_experience
+    response_data["professional_summary"] = professional_summary
 
     return response_data
 
