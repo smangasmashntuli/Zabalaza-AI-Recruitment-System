@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 from typing import Dict, List, Optional, Tuple
 
@@ -36,6 +36,8 @@ class ResumeParser:
             "intern", "officer",
         ]
         self.section_headers = {
+            "summary": ["summary", "professional summary", "profile summary", "overview", "about me"],
+            "cover_letter": ["cover letter", "dear hiring manager", "dear recruiter"],
             "education": ["education", "academic background", "qualifications"],
             "experience": ["experience", "work experience", "employment history", "professional experience"],
             "skills": ["skills", "technical skills", "core competencies", "expertise"],
@@ -169,14 +171,20 @@ class ResumeParser:
     def _clean_lines(self, text: str) -> List[str]:
         return [line.strip() for line in text.splitlines() if line.strip()]
 
+    def _header_matches(self, line: str, header: str) -> bool:
+        header = header.strip().lower()
+        if not header:
+            return False
+        normalized = line.lower().strip(":").strip()
+        return bool(re.search(rf"\b{re.escape(header)}\b", normalized))
+
     def _get_section_lines(self, text: str, section_key: str) -> List[str]:
         lines = self._clean_lines(text)
         headers = self.section_headers.get(section_key, [])
         start_idx = None
 
         for idx, line in enumerate(lines):
-            normalized = line.lower().strip(":").strip()
-            if any(h in normalized for h in headers):
+            if any(self._header_matches(line, h) for h in headers):
                 start_idx = idx + 1
                 break
 
@@ -185,8 +193,7 @@ class ResumeParser:
 
         collected = []
         for line in lines[start_idx:]:
-            normalized = line.lower().strip(":").strip()
-            if any(any(h in normalized for h in values) for values in self.section_headers.values()):
+            if any(any(self._header_matches(line, h) for h in values) for values in self.section_headers.values()):
                 break
             collected.append(line)
 
@@ -272,7 +279,7 @@ class ResumeParser:
         date_ranges = self.date_range_pattern.findall(text)
         total = 0
         for start, end in date_ranges[:6]:
-            end_year = int(end) if end and end.isdigit() else datetime.utcnow().year
+            end_year = int(end) if end and end.isdigit() else datetime.now(timezone.utc).year
             total += max(end_year - int(start), 0)
         return float(total) if total else 0.0
 
@@ -321,51 +328,93 @@ class ResumeParser:
         return education
 
     def extract_work_experience(self, text: str) -> List[Dict[str, str]]:
-        experience = []
+        experience: List[Dict[str, str]] = []
         lines = self._get_section_lines(text, "experience") or self._clean_lines(text)
 
-        for idx, line in enumerate(lines):
-            if len(experience) >= 6:
-                break
+        def looks_like_title(value: str) -> bool:
+            low = value.lower()
+            return any(kw in low for kw in self.job_title_keywords) or bool(re.search(r"\b(lead|senior|junior|principal|head|manager|engineer|developer|analyst|consultant|specialist)\b", low))
 
-            block = " ".join(lines[idx: idx + 4])
+        def looks_like_company(value: str) -> bool:
+            low = value.lower()
+            if any(token in low for token in ["university", "college", "school"]):
+                return False
+            return bool(re.search(r"\b(ltd|limited|pty|inc|llc|corp|company|solutions|technologies|technology|studio|group|consulting|systems|bank|hospital|municipal|department)\b", low)) or (len(value.split()) <= 5 and value[0].isupper())
+
+        def parse_dates(block: str) -> Tuple[str, str, bool]:
             match = self.date_range_pattern.search(block)
-            has_title_keyword = any(kw in line.lower() for kw in self.job_title_keywords)
-            if not match and not has_title_keyword:
+            if match:
+                start = self._normalize_date(match.group(1))
+                end = self._normalize_date(match.group(2) or "")
+                current = (match.group(2) or "").lower() in {"present", "current"}
+                return start, end, current
+
+            years = re.findall(r"(?:19|20)\d{2}", block)
+            if years:
+                start = self._normalize_date(years[0])
+                end = self._normalize_date(years[-1]) if len(years) > 1 else ""
+                current = "present" in block.lower() or "current" in block.lower()
+                return start, end, current
+
+            return "", "", False
+
+        idx = 0
+        while idx < len(lines) and len(experience) < 8:
+            line = lines[idx].strip("-•\u2022\t ")
+            if not line:
+                idx += 1
                 continue
 
-            title = next((l for l in lines[idx: idx + 3] if any(kw in l.lower() for kw in self.job_title_keywords)), line)
+            lookahead = " ".join(lines[idx: idx + 5])
+            lower = line.lower()
+            next_line = lines[idx + 1].strip("-•\u2022\t ") if idx + 1 < len(lines) else ""
+            next_next = lines[idx + 2].strip("-•\u2022\t ") if idx + 2 < len(lines) else ""
+
+            has_signal = looks_like_title(line) or looks_like_title(next_line) or bool(self.date_range_pattern.search(lookahead))
+            if not has_signal:
+                idx += 1
+                continue
+
+            title = line if looks_like_title(line) else (next_line if looks_like_title(next_line) else (next_next if looks_like_title(next_next) else line))
+
             company = ""
-            for current_line in lines[idx: idx + 4]:
-                low = current_line.lower()
-                if " at " in low or "company" in low or ("," in current_line and len(current_line.split()) > 1):
-                    company = current_line
+            for candidate in [line, next_line, next_next, lines[idx + 3].strip("-•\u2022\t ") if idx + 3 < len(lines) else ""]:
+                if candidate and (" at " in candidate.lower() or looks_like_company(candidate) or " | " in candidate or "," in candidate):
+                    company = re.split(r"\s+at\s+", candidate, flags=re.IGNORECASE)[-1].split("|")[0].split(",")[0].strip()
                     break
 
-            start_date = ""
-            end_date = ""
-            current = False
-            if match:
-                start_date = self._normalize_date(match.group(1))
-                end_date = self._normalize_date(match.group(2) or "")
-                current = (end_date or "").lower() == "present"
-            else:
-                years = re.findall(r"(?:19|20)\d{2}", block)
-                if years:
-                    start_date = self._normalize_date(years[0])
-                    end_date = self._normalize_date(years[-1]) if len(years) > 1 else ""
+            bullets = []
+            for candidate in lines[idx: idx + 5]:
+                clean = candidate.strip()
+                if clean and (clean.startswith("-") or clean.startswith("•") or clean.startswith("*") or len(clean) > 45):
+                    bullets.append(clean.lstrip("-•* "))
 
+            block = " ".join(lines[idx: idx + 5])
+            start_date, end_date, current = parse_dates(block)
+
+            description = " ".join(bullets[:3])[:400] if bullets else block[:300]
             experience.append({
-                "title": (title or line)[:120] or "Not provided",
-                "company": (company or "Not provided")[:120],
+                "title": title[:140] or "Not provided",
+                "company": company[:140] or "Not provided",
                 "location": None,
                 "startDate": start_date,
                 "endDate": end_date,
                 "current": current,
-                "description": block[:300],
+                "description": description,
             })
 
-        return experience
+            idx += 3
+
+        # Deduplicate by title/company/date combination
+        deduped: List[Dict[str, str]] = []
+        seen = set()
+        for item in experience:
+            key = (item.get("title", "").lower(), item.get("company", "").lower(), item.get("startDate", ""), item.get("endDate", ""))
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(item)
+        return deduped
 
     def extract_certifications(self, text: str) -> List[Dict[str, str]]:
         certifications = []
@@ -379,22 +428,89 @@ class ResumeParser:
             })
         return certifications
 
+    def extract_professional_summary(self, text: str) -> Optional[str]:
+        lines = self._get_section_lines(text, "summary")
+        if lines:
+            summary = " ".join(lines[:4]).strip()
+            return summary or None
+
+        # Fallback to the first substantial paragraph after the header/contact block.
+        cleaned = self._clean_lines(text)
+        for line in cleaned[:12]:
+            lowered = line.lower()
+            if any(token in lowered for token in ["@", "linkedin", "github", "phone", "email"]):
+                continue
+            if len(line) >= 40 and not re.search(r"\b(?:education|experience|skills|projects|certifications)\b", lowered):
+                return line.strip()
+        return None
+
+    def extract_cover_letter(self, text: str) -> Optional[str]:
+        lines = self._get_section_lines(text, "cover_letter")
+        if lines:
+            return "\n".join(lines[:20]).strip() or None
+
+        # If the uploaded file bundles a letter and a CV, keep the opening paragraph as a best-effort cover letter.
+        cleaned = self._clean_lines(text)
+        if not cleaned:
+            return None
+
+        end_headers = {h for values in self.section_headers.values() for h in values if h not in self.section_headers.get("cover_letter", [])}
+        collected: List[str] = []
+        for line in cleaned[:30]:
+            lowered = line.lower().strip()
+            if any(h in lowered for h in end_headers):
+                break
+            if len(line) < 2:
+                continue
+            collected.append(line)
+            if len(" ".join(collected)) > 1200:
+                break
+
+        return "\n".join(collected).strip() or None
+
     def extract_projects(self, text: str) -> List[Dict[str, str]]:
-        projects = []
+        projects: List[Dict[str, str]] = []
         lines = self._get_section_lines(text, "projects")
         if not lines:
-            lines = [line for line in self._clean_lines(text) if "github" in line.lower() or "project" in line.lower()]
+            lines = [line for line in self._clean_lines(text) if any(token in line.lower() for token in ["project", "github", "portfolio", "app", "built", "developed", "created"])]
 
-        for line in lines[:12]:
+        current_project = None
+        for raw_line in lines[:20]:
+            line = raw_line.strip("-•\u2022\t ")
+            if not line:
+                continue
+
             links = self.url_pattern.findall(line)
-            projects.append({
-                "name": line[:140],
-                "link": links[0] if links else "",
-                "type": "publication" if "publication" in line.lower() else "project",
-            })
+            is_header_like = bool(re.match(r"^[A-Z][A-Za-z0-9 &/\-]{2,80}$", line)) and len(line.split()) <= 10
+            if is_header_like or line.lower().startswith(("project", "portfolio")):
+                if current_project:
+                    projects.append(current_project)
+                current_project = {
+                    "name": line[:140],
+                    "link": links[0] if links else "",
+                    "type": "publication" if "publication" in line.lower() else "project",
+                    "description": "",
+                }
+                continue
 
-        seen = set()
+            if current_project is None:
+                current_project = {
+                    "name": line[:140],
+                    "link": links[0] if links else "",
+                    "type": "publication" if "publication" in line.lower() else "project",
+                    "description": "",
+                }
+            else:
+                if links and not current_project.get("link"):
+                    current_project["link"] = links[0]
+                desc = current_project.get("description", "")
+                current_project["description"] = (desc + " " + line).strip()[:400]
+
+        if current_project:
+            projects.append(current_project)
+
         deduped = []
+        seen = set()
         for item in projects:
             key = item.get("name", "").lower().strip()
             if not key or key in seen:
@@ -476,7 +592,7 @@ class ResumeParser:
                 if (ambiguous or missing)
                 else "All core profile fields were validated against resume text."
             ),
-            "processed_at": datetime.utcnow().isoformat(),
+            "processed_at": datetime.now(timezone.utc).isoformat(),
         }
 
     def parse(self, file_content: bytes, file_type: str) -> Dict:
@@ -495,6 +611,8 @@ class ResumeParser:
             "full_name": full_name,
             "first_name": first_name,
             "last_name": last_name,
+            "professional_summary": self.extract_professional_summary(text),
+            "cover_letter": self.extract_cover_letter(text),
             "email": self.extract_email(text),
             "phone": self.extract_phone(text),
             "location": self.extract_location(text),
