@@ -14,7 +14,7 @@ import SavedJobs from './SavedJobs';
 import NotificationsPanel from './Notifications';
 import Settings from './Settings';
 
-function Dashboard({ onLogout }) {
+function Dashboard({ onLogout, theme, onThemeChange }) {
   const [activeView, setActiveView] = useState('overview');
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -796,7 +796,12 @@ function Dashboard({ onLogout }) {
           ) : activeView === 'notifications' ? (
             <NotificationsPanel notifications={notifications} onRefresh={fetchDashboardData} />
           ) : activeView === 'settings' ? (
-            <Settings candidateProfile={candidateProfile} onProfileUpdated={() => fetchDashboardData({ silent: true })} />
+            <Settings
+              candidateProfile={candidateProfile}
+              onProfileUpdated={() => fetchDashboardData({ silent: true })}
+              theme={theme}
+              onThemeChange={onThemeChange}
+            />
           ) : activeView === 'discover' ? (
             renderDiscoverView()
           ) : (
