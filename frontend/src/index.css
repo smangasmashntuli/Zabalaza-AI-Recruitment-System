@@ -1,3 +1,27 @@
+html {
+  --color-bg: #f6f8fb;
+  --color-surface: #ffffff;
+  --color-surface-muted: #eef2f7;
+  --color-text: #0f172a;
+  --color-text-muted: #475569;
+  --color-border: #d8e0ea;
+  --color-accent: #2563eb;
+  --shadow-soft: 0 14px 30px rgba(15, 23, 42, 0.08);
+  color-scheme: light;
+}
+
+html[data-theme='dark'] {
+  --color-bg: #0d1117;
+  --color-surface: #161b22;
+  --color-surface-muted: #0d1117;
+  --color-text: #ffffff;
+  --color-text-muted: #c9d1d9;
+  --color-border: #30363d;
+  --color-accent: #58a6ff;
+  --shadow-soft: 0 16px 34px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   font-family: 'Aptos', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', 'Oxygen',
@@ -6,8 +30,18 @@ body {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: var(--color-bg);
+  color: var(--color-text);
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
+body,
+button,
+input,
+select,
+textarea {
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
