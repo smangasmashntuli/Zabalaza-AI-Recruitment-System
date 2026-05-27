@@ -90,8 +90,8 @@ export const applyForJob = async (applicationData) => {
   return post(`${API_ENDPOINTS.CANDIDATES}/me/applications`, applicationData);
 };
 
-export const saveJob = async (jobId) => {
-  return post(`${API_ENDPOINTS.CANDIDATES}/me/saved-jobs`, { job_id: jobId });
+export const saveJob = async (jobPayload) => {
+  return post(`${API_ENDPOINTS.CANDIDATES}/me/saved-jobs`, jobPayload);
 };
 
 export const getSavedJobs = async () => {
