@@ -211,21 +211,45 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
     return ['interview', 'interview_scheduled'].includes(status);
   };
 
-  const handleSaveJob = async (job) => {
-    const jobId = job.job_id || job.id;
-    if (!jobId) return;
-    try {
-      setActionNotice('');
-      setSavingJobIds((current) => [...new Set([...current, jobId])]);
-      await saveJob(jobId);
-      await fetchSavedJobsData();
-      setActionNotice(`${job.title} saved successfully.`);
-    } catch (err) {
-      setActionNotice(err.message || 'Could not save the job.');
-    } finally {
-      setSavingJobIds((current) => current.filter((id) => id !== jobId));
-    }
-  };
+   const handleSaveJob = async (job) => {
+     const jobId = job.job_id || job.id;
+     const source = job.source || "internal";
+     const externalJobId = job.external_job_id || job.id;
+
+     if (!jobId && !job.title) return;
+     try {
+       setActionNotice('');
+       setSavingJobIds((current) => [...new Set([...current, jobId || externalJobId])]);
+       
+       // Prepare payload based on job source
+       const payload = {
+         job_id: source === "internal" ? jobId : null,
+         source: source,
+         external_job_id: source !== "internal" ? externalJobId : null,
+         job_data: source !== "internal" ? {
+           id: job.id,
+           job_id: job.job_id,
+           title: job.title,
+           description: job.description,
+           company: job.company,
+           location: job.location,
+           salary_min: job.salary_min,
+           salary_max: job.salary_max,
+           job_type: job.job_type,
+           posted: job.posted,
+           source: source,
+         } : null
+       };
+
+       await saveJob(payload);
+       await fetchSavedJobsData();
+       setActionNotice(`${job.title} saved successfully.`);
+     } catch (err) {
+       setActionNotice(err.message || 'Could not save the job.');
+     } finally {
+       setSavingJobIds((current) => current.filter((id) => id !== (jobId || externalJobId)));
+     }
+   };
 
   const handleInterviewTips = async () => {
     if (!selectedJob) return;
