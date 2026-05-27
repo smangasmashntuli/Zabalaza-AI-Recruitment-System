@@ -631,26 +631,40 @@ def get_saved_jobs(
 
     saved_jobs = []
     for saved in db.query(SavedJob).filter(SavedJob.candidate_id == candidate.id).order_by(SavedJob.saved_at.desc()).all():
-        job = db.query(Job).filter(Job.id == saved.job_id).first()
-        if not job:
-            continue
-        saved_jobs.append({
-            "saved_job_id": saved.id,
-            "saved_at": saved.saved_at,
-            "job": {
-                "id": job.id,
-                "title": job.title,
-                "description": job.description,
-                "requirements": job.requirements,
-                "location": job.location,
-                "salary_min": job.salary_min,
-                "salary_max": job.salary_max,
-                "job_type": job.job_type,
-                "experience_level": job.experience_level,
-                "company": getattr(job, "company", None),
-                "created_at": job.created_at,
-            }
-        })
+        if saved.source == "internal":
+            # Internal job
+            job = db.query(Job).filter(Job.id == saved.job_id).first()
+            if not job:
+                continue
+            saved_jobs.append({
+                "saved_job_id": saved.id,
+                "saved_at": saved.saved_at,
+                "source": "internal",
+                "job_id": job.id,
+                "job": {
+                    "id": job.id,
+                    "title": job.title,
+                    "description": job.description,
+                    "requirements": job.requirements,
+                    "location": job.location,
+                    "salary_min": job.salary_min,
+                    "salary_max": job.salary_max,
+                    "job_type": job.job_type,
+                    "experience_level": job.experience_level,
+                    "company": getattr(job, "company", None),
+                    "created_at": job.created_at,
+                }
+            })
+        else:
+            # External job - use stored job_data
+            saved_jobs.append({
+                "saved_job_id": saved.id,
+                "saved_at": saved.saved_at,
+                "source": saved.source,
+                "external_job_id": saved.external_job_id,
+                "job_id": saved.external_job_id,
+                "job": saved.job_data or {}
+            })
     return saved_jobs
 
 
@@ -665,18 +679,45 @@ def save_job_for_current_candidate(
         raise HTTPException(status_code=404, detail="Candidate profile not found")
 
     job_id = payload.get("job_id")
-    if not job_id:
-        raise HTTPException(status_code=400, detail="job_id is required")
+    source = payload.get("source", "internal")  # Track source: internal, adzuna, usajobs
+    job_data = payload.get("job_data")  # Full job object for external jobs
+    external_job_id = payload.get("external_job_id")  # External job identifier
 
-    job = db.query(Job).filter(Job.id == job_id).first()
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+    # For internal jobs, job_id must be provided and exist
+    if source == "internal" and not job_id:
+        raise HTTPException(status_code=400, detail="job_id is required for internal jobs")
 
-    existing = db.query(SavedJob).filter(SavedJob.candidate_id == candidate.id, SavedJob.job_id == job.id).first()
-    if existing:
-        return {"message": "Job already saved", "saved_job_id": existing.id}
+    # For external jobs, we need job_data and external_job_id
+    if source != "internal" and not (job_data or job_id):
+        raise HTTPException(status_code=400, detail="job_data or job_id is required for external jobs")
 
-    saved_job = SavedJob(candidate_id=candidate.id, job_id=job.id)
+    # Check if job already saved (for internal jobs)
+    if source == "internal":
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        existing = db.query(SavedJob).filter(SavedJob.candidate_id == candidate.id, SavedJob.job_id == job.id).first()
+        if existing:
+            return {"message": "Job already saved", "saved_job_id": existing.id}
+    else:
+        # For external jobs, check if already saved using external_job_id
+        existing = db.query(SavedJob).filter(
+            SavedJob.candidate_id == candidate.id,
+            SavedJob.source == source,
+            SavedJob.external_job_id == external_job_id
+        ).first()
+        if existing:
+            return {"message": "Job already saved", "saved_job_id": existing.id}
+
+    # Create saved job record
+    saved_job = SavedJob(
+        candidate_id=candidate.id,
+        job_id=job_id if source == "internal" else None,
+        source=source,
+        external_job_id=external_job_id,
+        job_data=job_data if source != "internal" else None
+    )
     db.add(saved_job)
     db.commit()
     db.refresh(saved_job)
@@ -685,9 +726,9 @@ def save_job_for_current_candidate(
         db,
         candidate.id,
         "saved_job_reminder",
-        f"Saved job reminder: {job.title}",
+        f"Saved job reminder: {job_data.get('title') if job_data else 'Unknown'}",
         "Remember to apply for this saved job before the deadline.",
-        job.id,
+        job_id if source == "internal" else None,
     )
 
     return {"message": "Job saved successfully", "saved_job_id": saved_job.id}
@@ -695,7 +736,7 @@ def save_job_for_current_candidate(
 
 @router.delete("/me/saved-jobs/{job_id}")
 def remove_saved_job(
-    job_id: int,
+    job_id: str,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
@@ -703,7 +744,14 @@ def remove_saved_job(
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate profile not found")
 
-    saved = db.query(SavedJob).filter(SavedJob.candidate_id == candidate.id, SavedJob.job_id == job_id).first()
+    # Try to parse as integer for internal jobs
+    try:
+        internal_job_id = int(job_id)
+        saved = db.query(SavedJob).filter(SavedJob.candidate_id == candidate.id, SavedJob.job_id == internal_job_id).first()
+    except ValueError:
+        # External job ID - use external_job_id field
+        saved = db.query(SavedJob).filter(SavedJob.candidate_id == candidate.id, SavedJob.external_job_id == job_id).first()
+
     if not saved:
         raise HTTPException(status_code=404, detail="Saved job not found")
 
