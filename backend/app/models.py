@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey, Enum, Boolean, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey, Enum, Boolean, UniqueConstraint, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 import enum
@@ -120,13 +120,13 @@ class Candidate(Base):
 
 class SavedJob(Base):
     __tablename__ = "saved_jobs"
-    __table_args__ = (
-        UniqueConstraint("candidate_id", "job_id", name="uix_candidate_saved_job"),
-    )
 
     id = Column(Integer, primary_key=True, index=True)
     candidate_id = Column(Integer, ForeignKey("candidates.id"), nullable=False)
-    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=True)  # Nullable for external jobs
+    source = Column(String(50), default="internal")  # "internal", "adzuna", "usajobs", etc.
+    external_job_id = Column(String(255), nullable=True)  # External job identifier
+    job_data = Column(JSON, nullable=True)  # Store full job data for external jobs
     saved_at = Column(DateTime, default=utc_now)
 
     candidate = relationship("Candidate")
