@@ -1212,3 +1212,164 @@
     gap: 12px;
   }
 }
+
+html[data-theme='dark'] .job-portal,
+html[data-theme='dark'] .job-portal-state,
+html[data-theme='dark'] .jobs-list-panel,
+html[data-theme='dark'] .job-details-panel,
+html[data-theme='dark'] .job-card,
+html[data-theme='dark'] .modal-content,
+html[data-theme='dark'] .stat-card {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+html[data-theme='dark'] .job-portal,
+html[data-theme='dark'] .job-details-panel,
+html[data-theme='dark'] .jobs-list-panel,
+html[data-theme='dark'] .job-details-content,
+html[data-theme='dark'] .profile-info-section {
+  background: var(--color-bg);
+}
+
+html[data-theme='dark'] .portal-header,
+html[data-theme='dark'] .jobs-list-header,
+html[data-theme='dark'] .details-header-top,
+html[data-theme='dark'] .details-meta-info,
+html[data-theme='dark'] .details-match-section,
+html[data-theme='dark'] .details-section,
+html[data-theme='dark'] .details-actions,
+html[data-theme='dark'] .modal-header,
+html[data-theme='dark'] .section,
+html[data-theme='dark'] .job-row-top {
+  border-color: var(--color-border);
+}
+
+html[data-theme='dark'] .header-content h1,
+html[data-theme='dark'] .details-job-title,
+html[data-theme='dark'] .job-title,
+html[data-theme='dark'] .modal-job-title,
+html[data-theme='dark'] .applications-state-title,
+html[data-theme='dark'] .details-section-title,
+html[data-theme='dark'] .section-title,
+html[data-theme='dark'] .match-header h3 {
+  color: var(--color-text);
+}
+
+html[data-theme='dark'] .header-subtitle,
+html[data-theme='dark'] .results-count,
+html[data-theme='dark'] .list-item-company,
+html[data-theme='dark'] .details-company-name,
+html[data-theme='dark'] .job-company,
+html[data-theme='dark'] .job-description,
+html[data-theme='dark'] .details-description,
+html[data-theme='dark'] .job-detail-item,
+html[data-theme='dark'] .details-state-text,
+html[data-theme='dark'] .applications-state-text,
+html[data-theme='dark'] .modal-job-company,
+html[data-theme='dark'] .posted-badge,
+html[data-theme='dark'] .list-detail {
+  color: var(--color-text-muted);
+}
+
+html[data-theme='dark'] .search-input-group-compact,
+html[data-theme='dark'] .search-input-group,
+html[data-theme='dark'] .search-bar,
+html[data-theme='dark'] .filter-button.inactive,
+html[data-theme='dark'] .details-badge-alt,
+html[data-theme='dark'] .tag,
+html[data-theme='dark'] .details-skill-tag,
+html[data-theme='dark'] .save-button,
+html[data-theme='dark'] .cancel-button,
+html[data-theme='dark'] .back-button,
+html[data-theme='dark'] .nav-button,
+html[data-theme='dark'] .close-button,
+html[data-theme='dark'] .filter-select {
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+html[data-theme='dark'] .search-input-compact,
+html[data-theme='dark'] .search-input,
+html[data-theme='dark'] .filter-select,
+html[data-theme='dark'] .form-textarea {
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+html[data-theme='dark'] .search-input-compact::placeholder,
+html[data-theme='dark'] .search-input::placeholder,
+html[data-theme='dark'] .form-textarea::placeholder {
+  color: var(--color-text-muted);
+}
+
+html[data-theme='dark'] .jobs-list-item,
+html[data-theme='dark'] .application-card,
+html[data-theme='dark'] .details-match-section,
+html[data-theme='dark'] .details-section,
+html[data-theme='dark'] .profile-info-section,
+html[data-theme='dark'] .details-skill-tag,
+html[data-theme='dark'] .match-action-button,
+html[data-theme='dark'] .detail-item {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+
+html[data-theme='dark'] .jobs-list-item:hover,
+html[data-theme='dark'] .match-action-button:hover,
+html[data-theme='dark'] .details-skill-tag:hover,
+html[data-theme='dark'] .filter-button:hover,
+html[data-theme='dark'] .close-item-button:hover,
+html[data-theme='dark'] .save-button-large:hover,
+html[data-theme='dark'] .apply-button-large:hover,
+html[data-theme='dark'] .applications-state-button:hover {
+  background: var(--color-button-hover);
+  color: #ffffff;
+}
+
+html[data-theme='dark'] .jobs-list-item.active {
+  background: var(--color-surface);
+  border-left-color: var(--color-button-hover);
+}
+
+html[data-theme='dark'] .company-logo,
+html[data-theme='dark'] .list-item-logo,
+html[data-theme='dark'] .company-logo-large,
+html[data-theme='dark'] .details-badge,
+html[data-theme='dark'] .job-logo-small,
+html[data-theme='dark'] .stat-icon,
+html[data-theme='dark'] .job-logo,
+html[data-theme='dark'] .modal-job-logo,
+html[data-theme='dark'] .job-portal-state-icon {
+  background: rgba(61, 68, 77, 0.18);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+html[data-theme='dark'] .apply-button-large,
+html[data-theme='dark'] .save-button-large,
+html[data-theme='dark'] .job-portal-state-button,
+html[data-theme='dark'] .applications-state-button,
+html[data-theme='dark'] .search-button,
+html[data-theme='dark'] .view-details-button,
+html[data-theme='dark'] .apply-button,
+html[data-theme='dark'] .submit-button {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+html[data-theme='dark'] .apply-button-large:hover,
+html[data-theme='dark'] .save-button-large:hover,
+html[data-theme='dark'] .job-portal-state-button:hover,
+html[data-theme='dark'] .search-button:hover,
+html[data-theme='dark'] .view-details-button:hover,
+html[data-theme='dark'] .apply-button:hover,
+html[data-theme='dark'] .submit-button:hover {
+  background: var(--color-button-hover);
+  color: #ffffff;
+}
+
