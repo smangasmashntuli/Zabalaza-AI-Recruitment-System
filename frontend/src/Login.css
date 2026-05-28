@@ -4,11 +4,12 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: #0f1419;
+  background: #d3d3d3;
 }
 
 .login-card {
   width: 100%;
+  border: 2px solid #cacaca;
   max-width: 420px;
   padding: 40px;
   background: white;
@@ -55,18 +56,19 @@
   width: 100%;
   padding: 12px 14px;
   font-size: 14px;
-  border: 1px solid #ddd;
+  border: 1px solid #979797;
   border-radius: 5px;
-  background: #fafafa;
+  background: #ffffff;
+  color: #000000;
   transition: border-color 0.3s, box-shadow 0.3s;
   box-sizing: border-box;
 }
 
 .form-group input:focus {
   outline: none;
-  border-color: #0066cc;
+  border-color: #505050;
   box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
-  background: white;
+  background: #ffffff;
 }
 
 .form-group input.error {
@@ -104,7 +106,7 @@
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  color: #555;
+  color: #191919;
 }
 
 .forgot-password {
@@ -153,7 +155,7 @@
   border-top: 1px solid #eee;
   text-align: center;
   font-size: 14px;
-  color: #666;
+  color: #1b1b1b;
 }
 
 .login-footer p {
