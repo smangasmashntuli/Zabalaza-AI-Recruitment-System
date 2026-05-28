@@ -13,11 +13,12 @@ html {
 html[data-theme='dark'] {
   --color-bg: #0d1117;
   --color-surface: #161b22;
-  --color-surface-muted: #0d1117;
+  --color-surface-muted: #161b22;
   --color-text: #ffffff;
-  --color-text-muted: #c9d1d9;
-  --color-border: #30363d;
-  --color-accent: #58a6ff;
+  --color-text-muted: #3d444d;
+  --color-border: #3d444db3;
+  --color-accent: #656c76;
+  --color-button-hover: #656c76;
   --shadow-soft: 0 16px 34px rgba(0, 0, 0, 0.35);
   color-scheme: dark;
 }
