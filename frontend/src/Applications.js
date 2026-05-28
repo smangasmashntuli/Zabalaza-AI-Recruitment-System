@@ -229,19 +229,8 @@ export function Applications() {
       <div className="applications-view">
         <div style={{ textAlign: 'center', padding: '100px 20px' }}>
           <h2>Error Loading Applications</h2>
-          <p style={{ color: '#ef4444', marginBottom: '20px' }}>{error}</p>
-          <button
-            onClick={fetchApplications}
-            style={{
-              padding: '12px 24px',
-              background: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '16px'
-            }}
-          >
+          <p className="applications-state-error" style={{ marginBottom: '20px' }}>{error}</p>
+          <button onClick={fetchApplications} className="applications-state-button">
             Retry
           </button>
         </div>
@@ -262,21 +251,10 @@ export function Applications() {
         <div style={{ textAlign: 'center', padding: '100px 20px' }}>
           <div style={{ fontSize: '64px', marginBottom: '16px' }}>📋</div>
           <h2 style={{ marginBottom: '8px' }}>No Applications Yet</h2>
-          <p style={{ color: '#6b7280', marginBottom: '24px' }}>
+          <p className="applications-state-text" style={{ marginBottom: '24px' }}>
             Start applying to jobs to see them here
           </p>
-          <button
-            onClick={() => window.location.href = '#/jobs'}
-            style={{
-              padding: '12px 24px',
-              background: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '16px'
-            }}
-          >
+          <button onClick={() => window.location.href = '#/jobs'} className="applications-state-button">
             Browse Jobs
           </button>
         </div>
