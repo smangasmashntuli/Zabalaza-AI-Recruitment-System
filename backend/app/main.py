@@ -88,10 +88,10 @@ def root():
 def health_check():
     """Health check endpoint - includes LLM service status."""
     from .services.gemini_service import get_gemini_service
-
+    
     gemini_svc = get_gemini_service()
     llm_enabled = gemini_svc and getattr(gemini_svc, "enabled", False)
-
+    
     return {
         "status": "healthy",
         "services": {
