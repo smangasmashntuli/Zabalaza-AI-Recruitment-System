@@ -28,12 +28,12 @@ def chat_endpoint(req: ChatRequest):
     """
     try:
         svc = get_gemini_service()
-
+        
         # Debug logging
         logger.info(f"🔍 Chat endpoint called")
         logger.info(f"   - Service exists: {bool(svc)}")
         logger.info(f"   - Service enabled: {getattr(svc, 'enabled', False) if svc else False}")
-
+        
         if not svc or not getattr(svc, 'enabled', False):
             error_msg = "LLM service is not available. Please check GEMINI_API_KEY configuration."
             logger.error(f"❌ {error_msg}")
@@ -45,17 +45,17 @@ def chat_endpoint(req: ChatRequest):
         # Try to generate response
         logger.info(f"📤 Calling Gemini chat with message: {req.message[:50]}...")
         reply = svc.chat(req.message, conversation_history=req.history, context=req.context)
-
+        
         if not reply:
             logger.error("❌ Gemini returned empty response")
             raise HTTPException(
                 status_code=500,
                 detail="Gemini returned empty response"
             )
-
+        
         logger.info(f"📥 Gemini responded successfully: {reply[:50]}...")
         return ChatResponse(reply=reply)
-
+        
     except HTTPException:
         raise
     except Exception as e:
