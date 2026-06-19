@@ -1,18 +1,80 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import './Dashboard.css';
 import CandidateProfile from './CandidateProfile';
-import { getCandidateProfile, getMyApplications, getJobMatchesWithInsights, getCareerPath, getProfileImprovementTips, applyForJob } from './api/candidates';
-import { getNotifications } from './api/candidates';
+import {
+  applyForJob,
+  getCandidateProfile,
+  getCareerPath,
+  getJobMatchesWithInsights,
+  getMyApplications,
+  getNotifications,
+  getProfileImprovementTips,
+} from './api/candidates';
 import { getJobs } from './api/jobs';
 import { getDiscoverIntelligence } from './api/intelligence';
 import { getCurrentUser } from './api/auth';
-import { calculateAnalytics, generateInsights, calculateProfileCompletion } from './api/analytics';
+import { calculateAnalytics, calculateProfileCompletion, generateInsights } from './api/analytics';
 import { formatApplication, formatRecommendation, getUserInitials } from './utils/formatters';
-import JobPortal from "./JobPortal";
-import { Applications } from "./Applications";
+import JobPortal from './JobPortal';
+import { Applications } from './Applications';
 import SavedJobs from './SavedJobs';
 import NotificationsPanel from './Notifications';
 import Settings from './Settings';
+import ChatBot from './ChatBot';
+
+const Icon = ({ name, size = 18, color = 'currentColor', strokeWidth = 1.8 }) => {
+  const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: color, strokeWidth, strokeLinecap: 'round', strokeLinejoin: 'round' };
+  const paths = {
+    home: <><path d="M3 11.5 12 4l9 7.5" /><path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9" /><path d="M9.5 20v-5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v5" /></>,
+    briefcase: <><rect x="3" y="7.5" width="18" height="12" rx="1.5" /><path d="M8 7.5V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1.5" /><path d="M3 12.5h18" /></>,
+    search: <><circle cx="11" cy="11" r="6.5" /><path d="M20 20l-4.5-4.5" /></>,
+    chat: <><path d="M4 5.5h16v10H10l-4 3.5v-3.5H4z" /><path d="M8 9h8" /><path d="M8 12h5" /></>,
+    user: <><circle cx="12" cy="8.5" r="3.5" /><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" /></>,
+    bell: <><path d="M7 10a5 5 0 0 1 10 0v4l1.5 2.5h-13L7 14z" /><path d="M10 19.5a2 2 0 0 0 4 0" /></>,
+    bookmark: <path d="M6 4h12v17l-6-4-6 4z" />,
+    star: <path d="M12 3.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3.1-5.3 3.1 1.2-6L3.4 9.8l6-.7z" />,
+    location: <><path d="M12 21s7-6.5 7-11.5a7 7 0 1 0-14 0C5 14.5 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.3" /></>,
+    clock: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3.2 2" /></>,
+    check: <path d="M5 12.5l4.5 4.5L19 7" />,
+    send: <path d="M4 12 20 4l-7 16-2.5-7.5z" />,
+    dots: <><circle cx="6" cy="12" r="1.3" /><circle cx="12" cy="12" r="1.3" /><circle cx="18" cy="12" r="1.3" /></>,
+    chevDown: <path d="M6 9l6 6 6-6" />,
+    building: <><rect x="4" y="3.5" width="10" height="17" /><rect x="15" y="9" width="5" height="11" /><path d="M7 7h1.2M10.8 7H12M7 10.5h1.2M10.8 10.5H12M7 14h1.2M10.8 14H12" /></>,
+    trend: <><path d="M4 16l5-5 4 4 7-8" /><path d="M16 6.5h4V10.5" /></>,
+    doc: <><path d="M7 3.5h7l3 3v14h-10z" /><path d="M14 3.5V7h3" /></>,
+    spark: <><path d="M12 3v4M12 17v4M3 12h4M17 12h4" /><path d="M6 6l2.5 2.5M17.5 17.5L15 15M18 6l-2.5 2.5M6 18l2.5-2.5" /></>,
+    plus: <path d="M12 5v14M5 12h14" />,
+    money: <><circle cx="12" cy="12" r="8.5" /><path d="M9.5 9.3c0-1 1-1.8 2.5-1.8s2.5.8 2.5 1.8c0 2.4-5 1.6-5 4 0 1 1 1.8 2.5 1.8s2.5-.8 2.5-1.8" /></>,
+    calendar: <><rect x="3.5" y="5" width="17" height="15.5" rx="1.5" /><path d="M3.5 9.5h17" /><path d="M8 3v3.5M16 3v3.5" /></>,
+    arrowRight: <path d="M5 12h14M13 6l6 6-6 6" />,
+    settings: <><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7.2 7.2 0 0 0-2-1.2L14.2 3h-4.4l-.4 2.6a7.2 7.2 0 0 0-2 1.2l-2.4-1-2 3.5 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.4-1a7.2 7.2 0 0 0 2 1.2l.4 2.6h4.4l.4-2.6a7.2 7.2 0 0 0 2-1.2l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z" /></>,
+  };
+  return <svg {...common}>{paths[name] || paths.star}</svg>;
+};
+
+const navItems = [
+  { id: 'overview', label: 'Dashboard', icon: 'home' },
+  { id: 'jobs', label: 'Find jobs', icon: 'search' },
+  { id: 'applications', label: 'Applications', icon: 'briefcase' },
+  { id: 'saved', label: 'Saved jobs', icon: 'bookmark' },
+  { id: 'coach', label: 'Career coach', icon: 'chat' },
+  { id: 'discover', label: 'Discover', icon: 'spark' },
+  { id: 'settings', label: 'Settings', icon: 'settings' },
+];
+
+const toneClass = ['coral', 'yellow', 'sage', 'sky', 'rose'];
+
+function CompanyBadge({ text, tone = 'coral', size = 44 }) {
+  return (
+    <div className={`retro-company-badge ${tone}`} style={{ width: size, height: size }}>
+      {text || 'AI'}
+    </div>
+  );
+}
+
+function Pill({ children, tone = 'sage', filled = false }) {
+  return <span className={`retro-pill ${tone} ${filled ? 'filled' : ''}`}>{children}</span>;
+}
 
 function Dashboard({ onLogout, theme, onThemeChange }) {
   const [activeView, setActiveView] = useState('overview');
@@ -30,8 +92,6 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
   const [improvementTipsLoading, setImprovementTipsLoading] = useState(false);
   const [discoverData, setDiscoverData] = useState(null);
   const [notifications, setNotifications] = useState([]);
-
-  // Dynamic data state
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
@@ -40,9 +100,90 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
   const [analytics, setAnalytics] = useState(null);
   const [insights, setInsights] = useState([]);
 
-  // Fetch all data on component mount
+  const fetchDashboardData = async ({ silent = false } = {}) => {
+    try {
+      if (!silent) setLoading(true);
+      setError(null);
+
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        onLogout?.();
+        return;
+      }
+
+      const profile = await getCandidateProfile();
+      const apps = await getMyApplications();
+      const jobs = await getJobs();
+      const formattedApps = apps.map((app) => formatApplication(app, jobs.find((job) => job.id === app.job_id))).filter(Boolean);
+
+      setCandidateProfile(profile);
+      setApplications(formattedApps);
+      setAnalytics(calculateAnalytics(apps));
+      setInsights(generateInsights(apps, profile));
+      setUserProfile({
+        name: currentUser.full_name || currentUser.username,
+        title: profile.title || profile.profile_summary || currentUser.email || currentUser.username,
+        avatar: getUserInitials(currentUser.full_name || currentUser.username),
+        profileComplete: calculateProfileCompletion(profile),
+      });
+
+      try {
+        const matchesResp = await getJobMatchesWithInsights(10);
+        const matches = Array.isArray(matchesResp) ? matchesResp : matchesResp.items || [];
+        setRecommendations(matches.map((match, index) => ({
+          ...formatRecommendation(match, index),
+          matchExplanation: match.match_explanation || '',
+          skillGaps: match.skill_gaps || [],
+          strengths: match.strengths || [],
+        })));
+        if (matchesResp?.insights) {
+          setInsights((current) => [...current, { title: 'Matching Insight', message: matchesResp.insights, action: 'Update Profile' }]);
+        }
+        if (matchesResp?.career_path) setCareerPath(matchesResp.career_path);
+      } catch (err) {
+        console.warn('Could not fetch job matches:', err);
+        setRecommendations([]);
+      }
+
+      try {
+        const [discoverResp, careerResp, notificationsData] = await Promise.all([
+          getDiscoverIntelligence().catch(() => null),
+          getCareerPath().catch(() => null),
+          getNotifications().catch(() => []),
+        ]);
+        setDiscoverData(discoverResp || null);
+        setCareerPath(careerResp?.career_path || careerPath || null);
+        setCareerPathNextRoles(Array.isArray(careerResp?.next_roles) ? careerResp.next_roles : []);
+        setCareerPathSkills(Array.isArray(careerResp?.learning_recommendations) ? careerResp.learning_recommendations : []);
+        setCareerPathTrendingSkills(Array.isArray(careerResp?.trending_skills) ? careerResp.trending_skills : []);
+        setNotifications(Array.isArray(notificationsData) ? notificationsData : []);
+      } catch {
+        setNotifications([]);
+      }
+
+      try {
+        setImprovementTipsLoading(true);
+        const improvementResp = await getProfileImprovementTips();
+        setProfileImprovementTips(improvementResp?.improvements || '');
+      } catch {
+        setProfileImprovementTips('');
+      } finally {
+        setImprovementTipsLoading(false);
+      }
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+      if (/session has expired|validate credentials/i.test(err.message || '')) {
+        onLogout?.();
+        return;
+      }
+      setError(err.message || 'Failed to load dashboard data');
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetchDashboardData().then(() => {});
+    fetchDashboardData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -52,11 +193,10 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
         const notificationsData = await getNotifications();
         setNotifications(Array.isArray(notificationsData) ? notificationsData : []);
       } catch {
-        // keep existing state
+        // Keep the current notification list.
       }
     };
 
-    refreshNotifications();
     const interval = window.setInterval(refreshNotifications, 60000);
     window.addEventListener('focus', refreshNotifications);
     return () => {
@@ -65,152 +205,66 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
     };
   }, []);
 
-  const fetchDashboardData = async ({ silent = false } = {}) => {
-    try {
-      if (!silent) {
-        setLoading(true);
-      }
-      setError(null);
-
-      // Fetch user data
-      const currentUser = getCurrentUser();
-      if (!currentUser) {
-        onLogout?.();
-        return;
-      }
-
-      // Fetch candidate profile
-      const profile = await getCandidateProfile();
-      setCandidateProfile(profile);
-
-      // Fetch applications with job details
-      const apps = await getMyApplications();
-
-      // Fetch all jobs to get details for applications
-      const jobs = await getJobs();
-
-      // Format applications with job details
-      const formattedApps = apps.map(app => {
-        const job = jobs.find(j => j.id === app.job_id);
-        return formatApplication(app, job);
-      }).filter(app => app !== null);
-
-      setApplications(formattedApps);
-
-      // Fetch job matches/recommendations (with optional conversational insights)
-      try {
-        const matchesResp = await getJobMatchesWithInsights(10);
-        const matches = Array.isArray(matchesResp) ? matchesResp : (matchesResp.items || []);
-        const formattedMatches = matches.map((match, index) =>
-          ({
-            ...formatRecommendation(match, index),
-            matchExplanation: match.match_explanation || '',
-            skillGaps: match.skill_gaps || [],
-            strengths: match.strengths || [],
-          })
-        );
-
-          // Fetch live discover intelligence (CV-grounded + market data)
-          try {
-            const discoverResp = await getDiscoverIntelligence();
-            setDiscoverData(discoverResp || null);
-          } catch (discoverErr) {
-            console.warn('Could not fetch discover intelligence:', discoverErr);
-            setDiscoverData(null);
-          }
-        setRecommendations(formattedMatches);
-
-        // If the API returned an insights string, add it to the dashboard insights
-        if (matchesResp && matchesResp.insights) {
-          setInsights((s) => [...s, { title: 'Matching Insight', message: matchesResp.insights, action: 'Update Profile' }]);
-        }
-
-        if (matchesResp && matchesResp.career_path) {
-          setCareerPath(matchesResp.career_path);
-        }
-
-        try {
-          const careerResp = await getCareerPath();
-          setCareerPath(careerResp?.career_path || matchesResp?.career_path || null);
-          setCareerPathNextRoles(Array.isArray(careerResp?.next_roles) ? careerResp.next_roles : []);
-          setCareerPathSkills(Array.isArray(careerResp?.learning_recommendations) ? careerResp.learning_recommendations : []);
-          setCareerPathTrendingSkills(Array.isArray(careerResp?.trending_skills) ? careerResp.trending_skills : []);
-        } catch (careerErr) {
-          if (!matchesResp?.career_path) {
-            console.warn('Could not fetch career path guidance:', careerErr);
-          }
-        }
-
-        // Load profile improvement tips
-        try {
-          setImprovementTipsLoading(true);
-          const improvementResp = await getProfileImprovementTips();
-          setProfileImprovementTips(improvementResp?.improvements || '');
-        } catch (improvementErr) {
-          console.warn('Could not fetch improvement tips:', improvementErr);
-        } finally {
-          setImprovementTipsLoading(false);
-        }
-
-          try {
-            const notificationsData = await getNotifications();
-            setNotifications(Array.isArray(notificationsData) ? notificationsData : []);
-          } catch (notificationErr) {
-            console.warn('Could not fetch notifications:', notificationErr);
-            setNotifications([]);
-          }
-      } catch (err) {
-        console.warn('Could not fetch job matches:', err);
-        setRecommendations([]);
-      }
-
-      // Calculate analytics
-      const analyticsData = calculateAnalytics(apps);
-      setAnalytics(analyticsData);
-
-      // Generate insights
-      const insightsData = generateInsights(apps, profile);
-      setInsights(insightsData);
-
-      // Set user profile data
-      setUserProfile({
-        name: currentUser.full_name || currentUser.username,
-        title: profile.title || profile.profile_summary || currentUser.email || currentUser.username,
-        avatar: getUserInitials(currentUser.full_name || currentUser.username),
-        profileComplete: calculateProfileCompletion(profile)
-      });
-
-    } catch (err) {
-      console.error('Error fetching dashboard data:', err);
-      if (/session has expired|validate credentials/i.test(err.message || '')) {
-        onLogout?.();
-        return;
-      }
-      setError(err.message || 'Failed to load dashboard data');
-    } finally {
-      if (!silent) {
-        setLoading(false);
-      }
-    }
+  const displayUserProfile = userProfile || { name: '', title: '', avatar: '', profileComplete: 0 };
+  const displayAnalytics = analytics || {
+    applications: { value: 0, change: 0, period: 'vs last month', positive: false },
+    interviews: { value: 0, change: 0, period: 'scheduled', positive: false },
+    responseRate: { value: 0, change: 0, period: 'vs average', positive: false },
+    offers: { value: 0, change: 0, period: 'pending', positive: false },
   };
+  const candidateSkills = candidateProfile?.skills_list || [];
+  const unreadCount = notifications.filter((notification) => !notification.is_read).length;
 
-  // Handle quick apply
-  const handleQuickApply = async (jobId) => {
-    try {
-      await applyForJob({
-        job_id: jobId,
-        cover_letter: 'Quick application via AI match recommendation'
-      });
-      // Refresh applications
-      await fetchDashboardData();
-      alert('Application submitted successfully!');
-    } catch (err) {
-      alert(err.message || 'Failed to submit application');
+  const profileChecklist = [
+    { label: 'Complete basic information', completed: Boolean(candidateProfile?.phone && candidateProfile?.location) },
+    { label: 'Add work experience', completed: Boolean(candidateProfile?.work_experience_list?.length) },
+    { label: 'Upload resume', completed: Boolean(candidateProfile?.resume_path || candidateProfile?.resume_text) },
+    { label: 'Add certifications', completed: Boolean(candidateProfile?.certifications?.length) },
+  ];
+
+  const topRecommendations = recommendations.slice(0, 3);
+  const nearMatches = recommendations
+    .filter((job) => job.match >= 55 && job.match < 80)
+    .slice(0, 3)
+    .map((job) => ({ ...job, missingSkills: (job.tags || []).filter((tag) => !candidateSkills.includes(tag)).slice(0, 3) }));
+  const discoverInsights = discoverData?.discover || null;
+  const targetCompanies = Array.from(new Set([
+    ...(discoverInsights?.top_companies || []),
+    ...recommendations.map((job) => job.company).filter(Boolean),
+  ])).slice(0, 4);
+  const learningRecommendations = careerPathSkills.length > 0
+    ? [...new Set([...careerPathSkills, ...careerPathTrendingSkills])].slice(0, 5)
+    : [...new Set([...nearMatches.flatMap((job) => job.missingSkills || []), ...careerPathTrendingSkills])].slice(0, 5);
+  const dynamicCareerPaths = (() => {
+    const nextRoles = careerPathNextRoles.length ? careerPathNextRoles : discoverInsights?.career_path?.next_roles || [];
+    if (nextRoles.length) {
+      return nextRoles.slice(0, 3).map((role, index) => ({
+        current: index === 0 ? candidateProfile?.title || displayUserProfile.title || 'Current role' : nextRoles[index - 1],
+        next: role,
+        description: [careerPath, learningRecommendations.length ? `Focus areas: ${learningRecommendations.slice(0, 3).join(', ')}` : ''].filter(Boolean).join(' - '),
+      }));
     }
-  };
+    return topRecommendations.slice(0, 2).map((job) => ({
+      current: candidateProfile?.title || displayUserProfile.title || 'Current role',
+      next: job.position || job.title,
+      description: job.matchExplanation || `Match score: ${job.match}%`,
+    }));
+  })();
+  const discoverTips = [
+    profileImprovementTips,
+    !candidateProfile?.resume_text && 'Upload your resume to unlock deeper AI matching.',
+    !candidateProfile?.work_experience_list?.length && 'Add work experience to improve role seniority matching.',
+    candidateSkills.length < 5 && 'Add more skills to improve skill-overlap recommendations.',
+  ].filter(Boolean).slice(0, 4);
 
-  // Filter applications
-  const filteredApplications = applications.filter(app => {
+  const businessActions = [
+    ...(discoverInsights?.job_suggestions?.title ? [{ label: discoverInsights.job_suggestions.title, description: discoverInsights.job_suggestions.description || 'Live recommendation from your career intelligence layer.' }] : []),
+    ...(discoverInsights?.industry_trends?.title ? [{ label: discoverInsights.industry_trends.title, description: discoverInsights.industry_trends.description || 'Current market signals from your field.' }] : []),
+    { label: discoverData?.news_supported ? 'Industry News Feed' : 'Connect a News API', description: discoverData?.news_supported ? 'Live news results from your configured provider.' : 'Configure a news provider API key to show real-time news here.' },
+    { label: 'Create a Company Page', description: 'Start a business profile for employer workflows.' },
+  ];
+
+  const filteredApplications = applications.filter((app) => {
     if (selectedFilter === 'all') return true;
     if (selectedFilter === 'applied') return app.status === 'applied';
     if (selectedFilter === 'interview') return app.status === 'interview_scheduled';
@@ -218,983 +272,357 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
     return true;
   });
 
-  // Show loading state
-  if (loading) {
-    return (
-      <div className="dashboard loading-state">
-        <div className="loading-spinner">
-          <h2>Loading your dashboard...</h2>
-          <div className="spinner"></div>
-        </div>
-      </div>
-    );
-  }
-
-  // Show error state
-  if (error) {
-    return (
-      <div className="dashboard error-state">
-        <div className="error-message">
-          <h2>Error Loading Dashboard</h2>
-          <p>{error}</p>
-          <button onClick={fetchDashboardData}>Retry</button>
-        </div>
-      </div>
-    );
-  }
-
-  // Fallback data if no data loaded
-  const displayUserProfile = userProfile || {
-    name: '',
-    title: '',
-    avatar: '',
-    profileComplete: 0
-  };
-
-  const displayAnalytics = analytics || {
-    applications: { value: 0, change: 0, period: 'vs last month', positive: false },
-    interviews: { value: 0, change: 0, period: 'scheduled', positive: false },
-    responseRate: { value: 0, change: 0, period: 'vs average', positive: false },
-    offers: { value: 0, change: 0, period: 'pending', positive: false }
-  };
-
-  const getStatusInfo = (status) => {
-    const statusMap = {
-      'applied': { label: 'Applied', color: 'blue', icon: 'send' },
-      'under_review': { label: 'Under Review', color: 'purple', icon: 'search' },
-      'interview_scheduled': { label: 'Interview', color: 'green', icon: 'calendar' },
-      'offer_received': { label: 'Offer', color: 'gold', icon: 'star' },
-      'rejected': { label: 'Not Selected', color: 'gray', icon: 'close' }
-    };
-    return statusMap[status] || statusMap['applied'];
-  };
-
-  const profileChecklist = [
-    {
-      label: 'Complete basic information',
-      completed: Boolean(candidateProfile?.phone && candidateProfile?.location),
-    },
-    {
-      label: 'Add work experience',
-      completed: Boolean(candidateProfile?.work_experience_list?.length),
-    },
-    {
-      label: 'Upload resume',
-      completed: Boolean(candidateProfile?.resume_path || candidateProfile?.resume_text),
-    },
-    {
-      label: 'Add certifications',
-      completed: Boolean(candidateProfile?.certifications?.length),
-    },
-  ];
-
-  const dynamicNotificationCount = notifications.filter((notification) => !notification.is_read).length;
-
-  const businessActions = [
-    ...(discoverData?.discover?.job_suggestions?.title ? [{
-      label: discoverData.discover.job_suggestions.title,
-      description: discoverData.discover.job_suggestions.description || 'Live recommendation from your career intelligence layer.',
-    }] : []),
-    ...(discoverData?.discover?.industry_trends?.title ? [{
-      label: discoverData.discover.industry_trends.title,
-      description: discoverData.discover.industry_trends.description || 'Current market signals from your field.',
-    }] : []),
-    ...(discoverData?.news_supported ? [{
-      label: 'Industry News Feed',
-      description: 'Live news results from your configured news provider.',
-    }] : [{
-      label: 'Connect a News API',
-      description: 'To show real-time news here, configure a news provider API key.',
-    }]),
-  ];
-
-
-  const candidateSkills = candidateProfile?.skills_list || [];
-  const topRecommendations = recommendations.slice(0, 3);
-  const nearMatches = recommendations
-    .filter((job) => job.match >= 55 && job.match < 80)
-    .slice(0, 3)
-    .map((job) => ({
-      ...job,
-      missingSkills: job.tags.filter((tag) => !candidateSkills.includes(tag)).slice(0, 3),
-    }));
-
-  const targetCompanies = Array.from(
-    new Set([
-      ...(discoverData?.discover?.top_companies || []),
-      ...recommendations.map((job) => job.company).filter(Boolean),
-    ])
-  ).slice(0, 4);
-
-  const learningRecommendations = careerPathSkills.length > 0
-    ? [...new Set([...careerPathSkills, ...careerPathTrendingSkills])].slice(0, 5)
-    : [...new Set([...nearMatches.flatMap((job) => job.missingSkills || []), ...careerPathTrendingSkills])].slice(0, 5);
-
-  const currentCareerTitle = (candidateProfile?.title || userProfile?.title || '').trim();
-
-  const discoverInsights = discoverData?.discover || null;
-
-  const dynamicCareerPaths = (() => {
-    const paths = [];
-    const nextRoles = Array.isArray(careerPathNextRoles) ? careerPathNextRoles.filter(Boolean) : [];
-
-    const discoverNextRoles = Array.isArray(discoverInsights?.career_path?.next_roles) ? discoverInsights.career_path.next_roles.filter(Boolean) : [];
-    const effectiveNextRoles = nextRoles.length > 0 ? nextRoles : discoverNextRoles;
-
-    if (effectiveNextRoles.length > 0) {
-      effectiveNextRoles.slice(0, 3).forEach((role, index) => {
-        const sourceRole = index === 0
-          ? (currentCareerTitle || topRecommendations[0]?.position || '')
-          : (effectiveNextRoles[index - 1] || currentCareerTitle || '');
-        const relatedJob = topRecommendations[index] || topRecommendations[0] || null;
-        const focusText = learningRecommendations.length > 0
-          ? `Focus areas: ${learningRecommendations.slice(0, 3).join(', ')}`
-          : '';
-
-        paths.push({
-          current: sourceRole,
-          next: role,
-          description: [careerPath, relatedJob?.matchExplanation, focusText].filter(Boolean).join(' • '),
-        });
-      });
-
-      return paths.filter((item) => item.current || item.next || item.description);
+  const handleQuickApply = async (jobId) => {
+    try {
+      await applyForJob({ job_id: jobId, cover_letter: 'Quick application via AI match recommendation' });
+      await fetchDashboardData();
+      alert('Application submitted successfully!');
+    } catch (err) {
+      alert(err.message || 'Failed to submit application');
     }
-
-    if (topRecommendations.length > 0) {
-      topRecommendations.slice(0, 2).forEach((job, index) => {
-        const sourceRole = index === 0
-          ? (currentCareerTitle || '')
-          : (topRecommendations[index - 1]?.position || currentCareerTitle || '');
-        const skillGapText = (job.skillGaps || []).slice(0, 3).join(', ');
-
-        paths.push({
-          current: sourceRole,
-          next: job.position || '',
-          description: job.matchExplanation || (skillGapText ? `Skills to build: ${skillGapText}` : `Match score: ${job.match}%`),
-        });
-      });
-
-      return paths.filter((item) => item.current || item.next || item.description);
-    }
-
-    if (learningRecommendations.length > 0) {
-      paths.push({
-        current: currentCareerTitle || 'Your current role',
-        next: effectiveNextRoles[0] || 'Next target role',
-        description: `Trending skills to learn: ${learningRecommendations.slice(0, 4).join(', ')}`,
-      });
-      return paths;
-    }
-
-    return [];
-  })();
-
-  const discoverTips = (
-    discoverInsights?.cv_improvements?.query_for_gemini
-      ? [
-          discoverInsights.cv_improvements.description || 'Improve your profile using your uploaded CV.',
-          discoverInsights.industry_trends?.description || 'Review live industry trends to guide your next move.',
-          discoverInsights.job_suggestions?.description || 'Explore jobs that match your profile signal.',
-        ]
-      : [
-          !candidateProfile?.resume_text && 'Upload your resume to unlock deeper AI matching.',
-          !candidateProfile?.work_experience_list?.length && 'Add work experience to improve role seniority matching.',
-          !candidateProfile?.education_list?.length && 'Include your education details to strengthen academic fit scoring.',
-          candidateSkills.length < 5 && 'Add more skills to improve skill-overlap recommendations.',
-        ]
-  ).filter(Boolean);
-
-  const handleFindJobs = () => {
-    setActiveView('jobs');
   };
 
+  const handleFindJobs = () => setActiveView('jobs');
   const handleBusinessAction = (label) => {
     setShowBusinessMenu(false);
-    if (label === 'Create a Company Page') {
-      alert('Company page creation will require verification before it is published.');
-      return;
-    }
-    alert(`${label} is available from the business workflow.`);
+    alert(label === 'Create a Company Page' ? 'Company page creation will require verification before it is published.' : `${label} is available from the business workflow.`);
   };
 
+  const renderOverview = () => (
+    <div className="retro-page">
+      <div className="retro-page-header">
+        {/*<div>
+          <p className="retro-muted">Welcome back</p>
+          <h1>Hey {displayUserProfile.name?.split(' ')[0] || 'there'}, let's find your next role.</h1>
+        </div>*/}
+
+        <div>
+          <p className="retro-muted">Welcome back</p>
+          <h1>
+            Hey {displayUserProfile.first_name?.split(' ')[0] ||
+            displayUserProfile.firstName?.split(' ')[0] ||
+            'there'},
+            let's find your next role.
+          </h1>
+        </div>
+
+        <button className="retro-ghost-button" onClick={() => setActiveView('jobs')}><Icon name="search" />Browse jobs</button>
+      </div>
+
+      <section className="retro-hero-search">
+        <div className="retro-search-field">
+          <Icon name="search" />
+          <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search by job title" />
+        </div>
+        <div className="retro-search-field">
+          <Icon name="location" />
+          <input value={searchLocation} onChange={(event) => setSearchLocation(event.target.value)} placeholder="Location" />
+        </div>
+        <button className="retro-primary-button" onClick={handleFindJobs}>Find Jobs</button>
+      </section>
+
+      <section className="retro-stats-grid">
+        {[
+          { label: 'Applications sent', value: displayAnalytics.applications.value, delta: displayAnalytics.applications.period, icon: 'doc', tone: 'coral' },
+          { label: 'Interviews', value: displayAnalytics.interviews.value, delta: displayAnalytics.interviews.period, icon: 'calendar', tone: 'yellow' },
+          { label: 'Response rate', value: `${displayAnalytics.responseRate.value}%`, delta: displayAnalytics.responseRate.period, icon: 'trend', tone: 'sage' },
+          { label: 'Active offers', value: displayAnalytics.offers.value, delta: displayAnalytics.offers.period, icon: 'star', tone: 'sky' },
+        ].map((stat) => (
+          <article className="retro-card retro-stat-card" key={stat.label}>
+            <span className={`retro-icon-box ${stat.tone}`}><Icon name={stat.icon} /></span>
+            <strong>{stat.value}</strong>
+            <p>{stat.label}</p>
+            <small>{stat.delta}</small>
+          </article>
+        ))}
+      </section>
+
+      <div className="retro-content-grid">
+        <section className="retro-card retro-section-card">
+          <div className="retro-section-header">
+            <h2>Recommended for you</h2>
+            <button className="retro-link-button" onClick={() => setActiveView('jobs')}>See all <Icon name="arrowRight" size={14} /></button>
+          </div>
+          <div className="retro-list">
+            {topRecommendations.length === 0 ? (
+              <div className="retro-empty"><Icon name="spark" />Complete your profile to generate AI-ranked job matches.</div>
+            ) : topRecommendations.map((job, index) => (
+              <div className="retro-list-item" key={job.id || job.position}>
+                <CompanyBadge text={job.companyLogo || job.logo} tone={toneClass[index % toneClass.length]} size={42} />
+                <div>
+                  <strong>{job.position}</strong>
+                  <span>{job.company} - {job.location}</span>
+                </div>
+                <Pill tone="sage" filled>{job.match}% match</Pill>
+                <button className="retro-mini-action" onClick={() => handleQuickApply(job.id)}>Apply</button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="retro-card retro-section-card">
+          <h2>Profile strength</h2>
+          <div className="retro-progress"><span style={{ width: `${displayUserProfile.profileComplete}%` }} /></div>
+          <p className="retro-muted">{displayUserProfile.profileComplete}% complete</p>
+          <div className="retro-checklist">
+            {profileChecklist.map((item) => (
+              <div key={item.label} className={item.completed ? 'complete' : ''}>
+                <Icon name={item.completed ? 'check' : 'clock'} size={14} />
+                {item.label}
+              </div>
+            ))}
+          </div>
+          <button className="retro-primary-button full" onClick={() => setShowProfile(true)}>Complete Profile</button>
+        </section>
+      </div>
+
+      <section className="retro-card retro-section-card">
+        <div className="retro-section-header">
+          <h2>Recent applications</h2>
+          <select className="retro-select" value={selectedFilter} onChange={(event) => setSelectedFilter(event.target.value)}>
+            <option value="all">All Status</option>
+            <option value="applied">Applied</option>
+            <option value="interview">Interview</option>
+            <option value="offer">Offer</option>
+          </select>
+        </div>
+        <div className="retro-application-grid">
+          {filteredApplications.slice(0, 4).map((app, index) => (
+            <article className="retro-application-card" key={app.id}>
+              <CompanyBadge text={app.companyLogo} tone={toneClass[index % toneClass.length]} size={40} />
+              <div>
+                <strong>{app.position}</strong>
+                <span>{app.company}</span>
+              </div>
+              <Pill tone={app.status === 'interview_scheduled' ? 'sage' : 'yellow'} filled>{app.status?.replace('_', ' ') || 'Applied'}</Pill>
+            </article>
+          ))}
+          {filteredApplications.length === 0 && <div className="retro-empty"><Icon name="briefcase" />No applications yet.</div>}
+        </div>
+      </section>
+
+      {insights.length > 0 && (
+        <section className="retro-card retro-section-cards">
+          <div className="retro-section-header">
+            <h2>AI insights</h2>
+            <span>{insights.length} signals</span>
+          </div>
+          <div className="retro-tip-grid">
+            {insights.slice(0, 3).map((insight, index) => (
+              <div className="retro-tip" key={`${insight.title}-${index}`}>
+                <Icon name="spark" size={15} />
+                <span><strong>{insight.title}</strong> {insight.message}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+
   const renderDiscoverView = () => (
-    <div className="discover-view">
-      <section className="discover-hero">
-        <div className="discover-hero-content">
-          <div>
-            <p className="discover-kicker">AI Discovery</p>
-            <h2 className="discover-title">Explore what Career Hub sees for you next</h2>
-            <p className="discover-subtitle">
-              This space combines your profile, application history, and recommendation signals to suggest roles, companies, and next moves.
-            </p>
-          </div>
-          <div className="discover-summary-card">
-            <span className="discover-summary-label">Profile Strength</span>
-            <strong className="discover-summary-value">{displayUserProfile.profileComplete}%</strong>
-            <span className="discover-summary-meta">{candidateSkills.length} tracked skills</span>
-          </div>
+    <div className="retro-page discover-view">
+      <section className="retro-card retro-discover-hero">
+        <div>
+          <p className="retro-muted">AI Discovery</p>
+          <h1>Explore what Career Hub sees for you next</h1>
+          <p>This space combines your profile, application history, and recommendation signals to suggest roles, companies, and next moves.</p>
+        </div>
+        <div className="retro-summary-tile">
+          <span>Profile Strength</span>
+          <strong>{displayUserProfile.profileComplete}%</strong>
+          <small>{candidateSkills.length} tracked skills</small>
         </div>
       </section>
 
       {careerPath && (
-        <section className="discover-section">
-          <div
-            className="discover-career-card"
-            style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(14,165,233,0.10))', borderRadius: '20px', padding: '20px', border: '1px solid rgba(99,102,241,0.18)' }}
-          >
-            <div className="discover-section-header" style={{ marginBottom: '12px' }}>
-              <h3>Gemini Career Guidance</h3>
-              <span>LLM-powered next-step advice</span>
-            </div>
-            <p style={{ margin: 0, lineHeight: 1.6 }}>{careerPath}</p>
-            {(careerPathNextRoles.length > 0 || learningRecommendations.length > 0) && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginTop: '16px' }}>
-                {careerPathNextRoles.length > 0 && (
-                  <div style={{ background: 'rgba(255,255,255,0.6)', borderRadius: '16px', padding: '14px' }}>
-                    <strong>Next roles</strong>
-                    <ul style={{ margin: '10px 0 0 18px' }}>
-                      {careerPathNextRoles.slice(0, 3).map((role) => <li key={role}>{role}</li>)}
-                    </ul>
-                  </div>
-                )}
-                {learningRecommendations.length > 0 && (
-                  <div style={{ background: 'rgba(255,255,255,0.6)', borderRadius: '16px', padding: '14px' }}>
-                    <strong>Learning focus</strong>
-                    <ul style={{ margin: '10px 0 0 18px' }}>
-                      {learningRecommendations.map((skill) => <li key={skill}>{skill}</li>)}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+        <section className="retro-card retro-section-card">
+          <div className="retro-section-header"><h2>Gemini Career Guidance</h2><span>LLM-powered next-step advice</span></div>
+          <p className="retro-readable">{careerPath}</p>
         </section>
       )}
 
-      <section className="discover-section">
-        <div className="discover-section-header">
-          <h3>Top Matches</h3>
-          <span>{topRecommendations.length} strongest recommendations</span>
-        </div>
-        <div className="discover-card-grid">
-          {topRecommendations.length === 0 ? (
-            <div className="discover-empty-card">
-              <Icon name="sparkles" size={28} />
-              <p>Complete your profile to generate AI-ranked job matches here.</p>
-            </div>
-          ) : (
-            topRecommendations.map((job) => (
-              <article key={job.id} className="discover-job-card">
-                <div className="discover-job-top">
-                  <div className="discover-company-mark">{job.companyLogo}</div>
-                  <span className="discover-match-score">{job.match}% Match</span>
-                </div>
-                <h4>{job.position}</h4>
-                <p className="discover-company-name">{job.company}</p>
-                {job.matchExplanation && (
-                  <p style={{ fontSize: '0.92rem', lineHeight: 1.5, color: '#475569' }}>{job.matchExplanation}</p>
-                )}
-                <div className="discover-meta-row">
-                  <span><Icon name="location" size={14} /> {job.location}</span>
-                  <span><Icon name="money" size={14} /> {job.salary}</span>
-                </div>
-                <div className="discover-tag-row">
-                  {job.tags.slice(0, 3).map((tag) => (
-                    <span key={tag} className="discover-tag">{tag}</span>
-                  ))}
-                </div>
+      <div className="retro-content-grid">
+        <section className="retro-card retro-section-card">
+          <div className="retro-section-header"><h2>Top Matches</h2><span>{topRecommendations.length} strongest recommendations</span></div>
+          <div className="retro-tile-grid">
+            {topRecommendations.length === 0 ? <div className="retro-empty"><Icon name="spark" />Complete your profile to generate matches.</div> : topRecommendations.map((job, index) => (
+              <article className="retro-mini-card" key={job.id || job.position}>
+                <div className="retro-card-top"><CompanyBadge text={job.companyLogo || job.logo} tone={toneClass[index % toneClass.length]} /><Pill tone="sage" filled>{job.match}%</Pill></div>
+                <h3>{job.position}</h3>
+                <p>{job.company}</p>
+                <div className="retro-tags">{(job.tags || []).slice(0, 3).map((tag) => <Pill key={tag}>{tag}</Pill>)}</div>
               </article>
-            ))
-          )}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
 
-      <section className="discover-two-column">
-        <div className="discover-panel">
-          <div className="discover-section-header">
-            <h3>Near Matches</h3>
-            <span>Roles you can unlock with a few improvements</span>
+        <section className="retro-card retro-section-card">
+          <div className="retro-section-header"><h2>Learning focus</h2><span>{learningRecommendations.length} skills</span></div>
+          <div className="retro-list compact">
+            {learningRecommendations.length === 0 ? <div className="retro-empty"><Icon name="doc" />No learning gaps yet.</div> : learningRecommendations.map((skill) => (
+              <div className="retro-list-item" key={skill}><Icon name="check" size={15} /> <strong>{skill}</strong></div>
+            ))}
           </div>
-          {nearMatches.length === 0 ? (
-            <div className="discover-empty-card compact">
-              <Icon name="chart" size={24} />
-              <p>No near-match roles yet. More recommendations will appear as your profile grows.</p>
-            </div>
-          ) : (
-            nearMatches.map((job) => (
-              <div key={job.id} className="discover-list-card">
-                <div className="discover-list-header">
-                  <div>
-                    <h4>{job.position}</h4>
-                    <p>{job.company}</p>
-                  </div>
-                  <span className="discover-soft-badge">{job.match}%</span>
-                </div>
-                <p className="discover-list-note">
-                  Missing skills: {job.missingSkills?.length ? job.missingSkills.join(', ') : 'No major skill gaps detected'}
-                </p>
-              </div>
-            ))
-          )}
-        </div>
+        </section>
+      </div>
 
-        <div className="discover-panel">
-          <div className="discover-section-header">
-            <h3>Learning Focus</h3>
-            <span>Skills to improve your next recommendation wave</span>
+      <div className="retro-content-grid">
+        <section className="retro-card retro-section-card">
+          <div className="retro-section-header"><h2>Career path</h2><span>{dynamicCareerPaths.length} paths</span></div>
+          <div className="retro-list">
+            {dynamicCareerPaths.map((path) => (
+              <article className="retro-path-card" key={`${path.current}-${path.next}`}>
+                <strong>{path.current}</strong>
+                <Icon name="arrowRight" size={15} />
+                <strong>{path.next}</strong>
+                <p>{path.description}</p>
+              </article>
+            ))}
           </div>
-          <div className="discover-learning-list">
-            {learningRecommendations.length === 0 ? (
-              <div className="discover-empty-card compact">
-                <Icon name="bookmark" size={24} />
-                <p>No gaps detected — we are refreshing your learning focus with trending skills now.</p>
-              </div>
-            ) : (
-              learningRecommendations.map((item) => (
-                <div key={item} className="discover-learning-item">
-                  <div className="discover-learning-icon">
-                    <Icon name="check" size={14} />
-                  </div>
-                  <span>{item}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="discover-two-column">
-        <div className="discover-panel">
-          <div className="discover-section-header">
-            <h3>Career Paths</h3>
-            <span>AI-suggested role progression</span>
+        <section className="retro-card retro-section-card">
+          <div className="retro-section-header"><h2>Target companies</h2><span>{targetCompanies.length} tracked</span></div>
+          <div className="retro-company-grid">
+            {targetCompanies.length === 0 ? <div className="retro-empty">No companies yet.</div> : targetCompanies.map((company, index) => (
+              <div className="retro-company-row" key={company}><CompanyBadge text={company.slice(0, 2).toUpperCase()} tone={toneClass[index % toneClass.length]} size={36} /><span>{company}</span></div>
+            ))}
           </div>
-          <div className="discover-paths">
-            {dynamicCareerPaths.length === 0 ? (
-              <div className="discover-empty-card compact">
-                <Icon name="sparkles" size={24} />
-                <p>Upload your CV and complete your profile to generate live role progression from the model.</p>
-              </div>
-            ) : (
-              dynamicCareerPaths.map((path, index) => (
-                <div key={`${path.current || 'current'}-${path.next || 'next'}-${index}`} className="discover-path-card">
-                  <span className="discover-path-current">{path.current}</span>
-                  <Icon name="arrow" size={16} />
-                  <span className="discover-path-next">{path.next}</span>
-                  {path.description && <p>{path.description}</p>}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        </section>
+      </div>
 
-        <div className="discover-panel">
-          <div className="discover-section-header">
-            <h3>Companies to Explore</h3>
-            <span>Based on your top recommendation patterns</span>
-          </div>
-          <div className="discover-company-grid">
-            {targetCompanies.length === 0 ? (
-              <div className="discover-empty-card compact">
-                <Icon name="users" size={24} />
-                <p>Company suggestions will appear once enough recommendations are available.</p>
-              </div>
-            ) : (
-              targetCompanies.map((company) => (
-                <div key={company} className="discover-company-card">
-                  <div className="discover-company-badge">{getUserInitials(company)}</div>
-                  <span>{company}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className="discover-section">
-        <div className="discover-section-header">
-          <h3>Profile Improvement Tips</h3>
-            <span>{improvementTipsLoading ? 'Loading...' : 'Personalized recommendations'}</span>
-        </div>
-        <div className="discover-tips">
-            {profileImprovementTips ? (
-              <pre style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontFamily: 'inherit' }}>
-                {profileImprovementTips}
-              </pre>
-            ) : discoverTips.length === 0 ? (
-            <div className="discover-empty-card compact">
-              <Icon name="sparkles" size={24} />
-              <p>Your profile already covers the core recommendation inputs.</p>
-            </div>
-          ) : (
-            discoverTips.map((tip) => (
-              <div key={tip} className="discover-tip-card">
-                <Icon name="lightning" size={18} />
-                <span>{tip}</span>
-              </div>
-            ))
-          )}
+      <section className="retro-card retro-section-card">
+        <div className="retro-section-header"><h2>Profile tips</h2><span>{improvementTipsLoading ? 'Loading' : `${discoverTips.length} tips`}</span></div>
+        <div className="retro-tip-grid">
+          {discoverTips.map((tip, index) => <div className="retro-tip" key={index}><Icon name="spark" size={15} />{tip}</div>)}
         </div>
       </section>
     </div>
   );
 
-  // SVG Icons Library
-  const Icon = ({ name, size = 20 }) => {
-    const icons = {
-      briefcase: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />,
-      calendar: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />,
-      chart: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />,
-      star: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />,
-      users: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />,
-      trending: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />,
-      location: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z" />,
-      money: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />,
-      search: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />,
-      filter: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />,
-      send: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />,
-      check: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />,
-      arrow: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />,
-      plus: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />,
-      bell: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />,
-      settings: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" />,
-      sparkles: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />,
-      bookmark: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />,
-      lightning: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-    };
-    return (
-      <svg width={size} height={size} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        {icons[name] || icons['star']}
-      </svg>
-    );
+  const renderContent = () => {
+    if (activeView === 'jobs') {
+      return <JobPortal onCompleteProfile={() => setShowProfile(true)} initialSearchQuery={searchQuery} initialLocation={searchLocation} />;
+    }
+    if (activeView === 'applications') return <Applications />;
+    if (activeView === 'saved') return <SavedJobs />;
+    if (activeView === 'coach') {
+      return (
+        <div className="career-coach-view">
+          <div className="career-coach-main">
+            <ChatBot mode="embedded" title="Career coach" />
+          </div>
+          <aside className="career-coach-side">
+            <section className="retro-card retro-section-card">
+              <h2>Your snapshot</h2>
+              <div className="coach-profile-chip">
+                <span className="retro-avatar">{displayUserProfile.avatar || <Icon name="user" size={16} />}</span>
+                <div>
+                  <strong>{displayUserProfile.name}</strong>
+                  <small>{displayUserProfile.title}</small>
+                </div>
+              </div>
+              <div className="retro-progress"><span style={{ width: `${displayUserProfile.profileComplete}%` }} /></div>
+              <p className="retro-muted">{displayUserProfile.profileComplete}% profile strength</p>
+            </section>
+            <section className="retro-card retro-section-card">
+              <h2>Quick actions</h2>
+              <div className="coach-action-list">
+                <button onClick={() => setActiveView('jobs')}><Icon name="search" size={15} />Browse matched jobs</button>
+                <button onClick={() => setShowProfile(true)}><Icon name="doc" size={15} />Update my profile</button>
+                <button onClick={() => setActiveView('applications')}><Icon name="briefcase" size={15} />Review applications</button>
+              </div>
+            </section>
+          </aside>
+        </div>
+      );
+    }
+    if (activeView === 'notifications') return <NotificationsPanel notifications={notifications} onRefresh={fetchDashboardData} />;
+    if (activeView === 'settings') {
+      return <Settings candidateProfile={candidateProfile} onProfileUpdated={() => fetchDashboardData({ silent: true })} theme={theme} onThemeChange={onThemeChange} />;
+    }
+    if (activeView === 'discover') return renderDiscoverView();
+    return renderOverview();
   };
 
+  if (loading) {
+    return <div className="dashboard retro-loading"><div className="retro-card retro-loader"><h2>Loading your dashboard...</h2><div className="spinner" /></div></div>;
+  }
+
+  if (error) {
+    return (
+      <div className="dashboard retro-loading">
+        <div className="retro-card retro-loader">
+          <h2>Error Loading Dashboard</h2>
+          <p>{error}</p>
+          <button className="retro-primary-button" onClick={() => fetchDashboardData()}>Retry</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="dashboard">
-      {/* Candidate Profile Modal */}
-      {showProfile && (
-        <CandidateProfile
-          onClose={() => setShowProfile(false)}
-          onProfileUpdated={() => fetchDashboardData({ silent: true })}
-        />
-      )}
+    <div className="dashboard retro-app-shell">
+      {showProfile && <CandidateProfile onClose={() => setShowProfile(false)} onProfileUpdated={() => fetchDashboardData({ silent: true })} />}
 
-      {/* Modern Header with Navigation */}
-      <header className="dashboard-header">
-        <div className="header-content">
-          <div className="header-left">
-            <div className="logo-section">
-              <div className="logo-icon">
-                <Icon name="briefcase" size={24} />
+      <header className="retro-topbar">
+        <div className="retro-logo">
+          <div className="retro-logo-mark">C</div>
+          <span>CareerHub</span>
+        </div>
+        <div className="retro-top-actions">
+          <div className="business-menu-wrapper">
+            <button className={`retro-ghost-button business-trigger ${showBusinessMenu ? 'open' : ''}`} onClick={() => setShowBusinessMenu((value) => !value)}>
+              <Icon name="building" />Business<Icon name="chevDown" size={14} />
+            </button>
+            {showBusinessMenu && (
+              <div className="business-dropdown">
+                {businessActions.map((action) => (
+                  <button key={action.label} className="business-dropdown-item" onClick={() => handleBusinessAction(action.label)}>
+                    <span className="business-dropdown-title">{action.label}</span>
+                    <span className="business-dropdown-description">{action.description}</span>
+                  </button>
+                ))}
               </div>
-              <h1 className="app-title">CareerHub</h1>
-            </div>
-
-            <nav className="main-nav">
-              <button
-                className={`nav-item ${activeView === 'overview' ? 'active' : ''}`}
-                onClick={() => setActiveView('overview')}
-              >
-                <Icon name="chart" size={18} />
-                Overview
-              </button>
-              <button
-                className={`nav-item ${activeView === 'applications' ? 'active' : ''}`}
-                onClick={() => setActiveView('applications')}
-              >
-                <Icon name="briefcase" size={18} />
-                Applications
-              </button>
-              <button
-                className={`nav-item ${activeView === 'saved' ? 'active' : ''}`}
-                onClick={() => setActiveView('saved')}
-              >
-                <Icon name="star" size={18} />
-                Saved Jobs
-              </button>
-              <button
-                className={`nav-item ${activeView === 'jobs' ? 'active' : ''}`}
-                onClick={() => setActiveView('jobs')}
-              >
-                <Icon name="search" size={18} />
-                Find Jobs
-              </button>
-              <button
-                className={`nav-item ${activeView === 'discover' ? 'active' : ''}`}
-                onClick={() => setActiveView('discover')}
-              >
-                <Icon name="sparkles" size={18} />
-                Discover
-              </button>
-            </nav>
+            )}
           </div>
-
-          <div className="header-right">
-            <button className="icon-button" onClick={() => setActiveView('notifications')}>
-              <Icon name="bell" size={20} />
-              {dynamicNotificationCount > 0 && <span className="notification-badge">{dynamicNotificationCount}</span>}
-            </button>
-            <button className="icon-button" onClick={() => setActiveView('settings')}>
-              <Icon name="settings" size={20} />
-            </button>
-            <div className="business-menu-wrapper">
-              <button
-                className={`icon-button business-trigger ${showBusinessMenu ? 'open' : ''}`}
-                onClick={() => setShowBusinessMenu((current) => !current)}
-              >
-                <Icon name="briefcase" size={20} />
-              </button>
-              {showBusinessMenu && (
-                <div className="business-dropdown">
-                  {businessActions.map((action) => (
-                    <button
-                      key={action.label}
-                      className="business-dropdown-item"
-                      onClick={() => handleBusinessAction(action.label)}
-                    >
-                      <span className="business-dropdown-title">{action.label}</span>
-                      <span className="business-dropdown-description">{action.description}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="user-profile-header" onClick={() => setShowProfile(true)}>
-              <div className="user-avatar-small">
-                {displayUserProfile.avatar || <Icon name="user" size={18} />}
-              </div>
-              <div className="user-info-small">
-                {displayUserProfile.name && <span className="user-name-small">{displayUserProfile.name}</span>}
-                {displayUserProfile.title && <span className="user-title-small">{displayUserProfile.title}</span>}
-              </div>
-            </div>
-            <button
-              onClick={onLogout}
-              className="logout-button"
-            >
-              Logout
-            </button>
-          </div>
+          <button className="retro-icon-button" onClick={() => setActiveView('notifications')} aria-label="Notifications">
+            <Icon name="bell" />
+            {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
+          </button>
+          <button className="retro-user-chip" onClick={() => setShowProfile(true)}>
+            <span className="retro-avatar">{displayUserProfile.avatar || <Icon name="user" size={16} />}</span>
+            <span className="retro-user-copy">
+              <strong>{displayUserProfile.name}</strong>
+              <small>{displayUserProfile.title}</small>
+            </span>
+            <Icon name="chevDown" size={14} color="var(--ink-mute)" />
+          </button>
+          <button className="retro-ghost-button" onClick={onLogout}>Logout</button>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="dashboard-main">
-        <div className="content-wrapper">
+      <div className="retro-workspace">
+        <aside className="retro-sidebar">
+          <nav>
+            {navItems.map((item) => (
+              <button key={item.id} className={`retro-nav-item ${activeView === item.id ? 'active' : ''}`} onClick={() => setActiveView(item.id)}>
+                <Icon name={item.icon} />{item.label}
+              </button>
+            ))}
+          </nav>
+          {/*<div className="retro-profile-meter">
+            <p>Profile strength</p>
+            <div className="retro-progress small"><span style={{ width: `${displayUserProfile.profileComplete}%` }} /></div>
+            <small>{displayUserProfile.profileComplete}% - add Git to skills</small>
+          </div>*/}
+        </aside>
 
-        {activeView === 'jobs' ? (
-            <JobPortal
-              onCompleteProfile={() => setShowProfile(true)}
-              initialSearchQuery={searchQuery}
-              initialLocation={searchLocation}
-            />
-          ) : activeView === 'applications' ? (
-            <Applications />
-          ) : activeView === 'saved' ? (
-            <SavedJobs />
-          ) : activeView === 'notifications' ? (
-            <NotificationsPanel notifications={notifications} onRefresh={fetchDashboardData} />
-          ) : activeView === 'settings' ? (
-            <Settings
-              candidateProfile={candidateProfile}
-              onProfileUpdated={() => fetchDashboardData({ silent: true })}
-              theme={theme}
-              onThemeChange={onThemeChange}
-            />
-          ) : activeView === 'discover' ? (
-            renderDiscoverView()
-          ) : (
-            <>
-
-          {/* Hero Section with Search */}
-          <section className="hero-section">
-            <div className="hero-content">
-              <h2 className="hero-title">Find Your Dream Job</h2>
-              <p className="hero-subtitle">Discover opportunities that match your skills and aspirations</p>
-
-              <div className="search-bar-container">
-                <div className="search-bar">
-                  <div className="search-segment">
-                    <Icon name="search" size={20} />
-                    <input
-                      type="text"
-                      placeholder="Search by job title"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="search-input"
-                    />
-                  </div>
-                  <div className="search-divider"></div>
-                  <div className="search-segment">
-                    <Icon name="location" size={20} />
-                    <input
-                      type="text"
-                      placeholder="Location"
-                      value={searchLocation}
-                      onChange={(e) => setSearchLocation(e.target.value)}
-                      className="search-input"
-                    />
-                  </div>
-                  <button className="find-jobs-button" onClick={handleFindJobs}>
-                    Find Jobs
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Analytics Cards */}
-          <section className="analytics-section">
-            <div className="analytics-grid">
-              <div className="metric-card">
-                <div className="metric-header">
-                  <div className="metric-icon blue">
-                    <Icon name="send" size={22} />
-                  </div>
-                  <span className={`metric-badge ${displayAnalytics.applications.positive ? 'positive' : 'negative'}`}>
-                    <Icon name="trending" size={14} />
-                    {displayAnalytics.applications.change >= 0 ? '+' : ''}{displayAnalytics.applications.change}
-                  </span>
-                </div>
-                <div className="metric-body">
-                  <h3 className="metric-value">{displayAnalytics.applications.value}</h3>
-                  <p className="metric-label">Total Applications</p>
-                  <p className="metric-period">{displayAnalytics.applications.period}</p>
-                </div>
-              </div>
-
-              <div className="metric-card">
-                <div className="metric-header">
-                  <div className="metric-icon green">
-                    <Icon name="calendar" size={22} />
-                  </div>
-                  <span className={`metric-badge ${displayAnalytics.interviews.positive ? 'positive' : 'negative'}`}>
-                    <Icon name="trending" size={14} />
-                    {displayAnalytics.interviews.change >= 0 ? '+' : ''}{displayAnalytics.interviews.change}
-                  </span>
-                </div>
-                <div className="metric-body">
-                  <h3 className="metric-value">{displayAnalytics.interviews.value}</h3>
-                  <p className="metric-label">Interviews</p>
-                  <p className="metric-period">{displayAnalytics.interviews.period}</p>
-                </div>
-              </div>
-
-              <div className="metric-card">
-                <div className="metric-header">
-                  <div className="metric-icon purple">
-                    <Icon name="chart" size={22} />
-                  </div>
-                  <span className={`metric-badge ${displayAnalytics.responseRate.positive ? 'positive' : 'negative'}`}>
-                    <Icon name="trending" size={14} />
-                    {displayAnalytics.responseRate.change >= 0 ? '+' : ''}{displayAnalytics.responseRate.change}%
-                  </span>
-                </div>
-                <div className="metric-body">
-                  <h3 className="metric-value">{displayAnalytics.responseRate.value}%</h3>
-                  <p className="metric-label">Response Rate</p>
-                  <p className="metric-period">{displayAnalytics.responseRate.period}</p>
-                </div>
-              </div>
-
-              <div className="metric-card">
-                <div className="metric-header">
-                  <div className="metric-icon gold">
-                    <Icon name="star" size={22} />
-                  </div>
-                  <span className={`metric-badge ${displayAnalytics.offers.positive ? 'positive' : 'negative'}`}>
-                    <Icon name="trending" size={14} />
-                    {displayAnalytics.offers.change >= 0 ? '+' : ''}{displayAnalytics.offers.change}
-                  </span>
-                </div>
-                <div className="metric-body">
-                  <h3 className="metric-value">{displayAnalytics.offers.value}</h3>
-                  <p className="metric-label">Active Offers</p>
-                  <p className="metric-period">{displayAnalytics.offers.period}</p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Insights Section */}
-          <section className="insights-section">
-            <div className="insights-grid">
-              {insights.map((insight, index) => (
-                <div key={index} className={`insight-card ${insight.priority}`}>
-                  <div className="insight-content">
-                    <h4 className="insight-title">{insight.title}</h4>
-                    <p className="insight-message">{insight.message}</p>
-                  </div>
-                  <button className="insight-action">{insight.action}</button>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* Main Grid Layout */}
-          <div className="content-grid">
-
-            {/* Applications Section */}
-            <section className="applications-section">
-              <div className="section-header">
-                <div className="section-title-group">
-                  <h3 className="section-title">Recent Applications</h3>
-                  <span className="count-badge">{applications.length}</span>
-                </div>
-                <div className="section-actions">
-                  <select
-                    className="filter-select"
-                    value={selectedFilter}
-                    onChange={(e) => setSelectedFilter(e.target.value)}
-                  >
-                    <option value="all">All Status</option>
-                    <option value="applied">Applied</option>
-                    <option value="interview">Interview</option>
-                    <option value="offer">Offer</option>
-                  </select>
-                  <button className="text-button">View All</button>
-                </div>
-              </div>
-
-              <div className="applications-list">
-                {filteredApplications.length === 0 ? (
-                  <div className="empty-state">
-                    <Icon name="briefcase" size={48} />
-                    <h3>No Applications Yet</h3>
-                    <p>Start exploring job matches and submit your first application!</p>
-                    <button className="primary-button" onClick={() => setActiveView('discover')}>
-                      Discover Jobs
-                    </button>
-                  </div>
-                ) : (
-                  filteredApplications.map((app) => {
-                    const statusInfo = getStatusInfo(app.status);
-                    return (
-                      <div key={app.id} className="application-card">
-                        <div className="application-header">
-                          <div className="company-logo-container">
-                            <div className="company-logo">{app.companyLogo}</div>
-                          </div>
-                          <div className="application-info">
-                            <div className="application-title-row">
-                              <h4 className="application-title">{app.position}</h4>
-                              <div className={`status-pill ${statusInfo.color}`}>
-                                {statusInfo.label}
-                              </div>
-                            </div>
-                            <p className="company-name">{app.company}</p>
-                          </div>
-                        </div>
-
-                        <div className="application-details">
-                          <div className="detail-item">
-                            <Icon name="location" size={16} />
-                            <span>{app.location}</span>
-                          </div>
-                          <div className="detail-item">
-                            <Icon name="briefcase" size={16} />
-                            <span>{app.workType}</span>
-                          </div>
-                          <div className="detail-item">
-                            <Icon name="money" size={16} />
-                            <span>{app.salary}</span>
-                          </div>
-                        </div>
-
-                        <div className="application-tags">
-                          {app.tags.map((tag, idx) => (
-                            <span key={idx} className="tag">{tag}</span>
-                          ))}
-                        </div>
-
-                        <div className="application-footer">
-                          <div className="footer-left">
-                            <div className="match-indicator">
-                              <Icon name="star" size={16} />
-                              <span className="match-score">{app.match}% Match</span>
-                            </div>
-                            <span className="application-date">{app.date}</span>
-                          </div>
-                          <div className="footer-right">
-                            <span className="next-action">{app.nextAction}</span>
-                            <button className="action-button-small">
-                              <Icon name="arrow" size={16} />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </section>
-
-            {/* Sidebar */}
-            <aside className="sidebar-section">
-
-              {/* AI Recommendations */}
-              <div className="sidebar-card">
-                <div className="sidebar-card-header">
-                  <div className="header-icon-text">
-                    <Icon name="sparkles" size={20} />
-                    <h3 className="sidebar-title">AI Matches</h3>
-                  </div>
-                  <span className="ai-badge-small">SMART</span>
-                </div>
-
-                <div className="recommendations-list">
-                  {recommendations.length === 0 ? (
-                    <div className="empty-state-small">
-                      <Icon name="sparkles" size={32} />
-                      <p>No job matches yet. Complete your profile to get personalized recommendations!</p>
-                      <button className="complete-profile-button" onClick={() => setShowProfile(true)}>
-                        Update Profile
-                      </button>
-                    </div>
-                  ) : (
-                    recommendations.map((job) => (
-                      <div key={job.id} className={`recommendation-card ${job.featured ? 'featured' : ''}`}>
-                        {job.featured && (
-                          <div className="featured-badge">
-                            <Icon name="lightning" size={12} />
-                            Hot Match
-                          </div>
-                        )}
-
-                        <div className="rec-header">
-                          <div className="rec-company-logo">{job.companyLogo}</div>
-                          <div className="rec-match-badge">{job.match}%</div>
-                        </div>
-
-                        <h4 className="rec-title">{job.position}</h4>
-                        <p className="rec-company">{job.company}</p>
-                        {job.matchExplanation && (
-                          <p style={{ margin: '8px 0 0', color: '#475569', lineHeight: 1.5 }}>
-                            {job.matchExplanation}
-                          </p>
-                        )}
-
-                        {(job.strengths?.length > 0 || job.skillGaps?.length > 0) && (
-                          <div style={{ marginTop: '12px', display: 'grid', gap: '8px' }}>
-                            {job.strengths?.length > 0 && (
-                              <div>
-                                <strong style={{ fontSize: '0.82rem' }}>Strengths</strong>
-                                <div className="rec-tags" style={{ marginTop: '6px' }}>
-                                  {job.strengths.slice(0, 3).map((item) => (
-                                    <span key={item} className="rec-tag">{item}</span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            {job.skillGaps?.length > 0 && (
-                              <div>
-                                <strong style={{ fontSize: '0.82rem' }}>Skills to learn</strong>
-                                <div className="rec-tags" style={{ marginTop: '6px' }}>
-                                  {job.skillGaps.slice(0, 3).map((item) => (
-                                    <span key={item} className="rec-tag-more">{item}</span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="rec-details">
-                          <span className="rec-detail">
-                            <Icon name="location" size={14} />
-                            {job.location}
-                          </span>
-                          <span className="rec-detail">
-                            <Icon name="money" size={14} />
-                            {job.salary}
-                          </span>
-                        </div>
-
-                        <div className="rec-tags">
-                          {job.tags.slice(0, 2).map((tag, idx) => (
-                            <span key={idx} className="rec-tag">{tag}</span>
-                          ))}
-                          {job.tags.length > 2 && (
-                            <span className="rec-tag-more">+{job.tags.length - 2}</span>
-                          )}
-                        </div>
-
-                        <div className="rec-footer">
-                          <span className="rec-posted">{job.posted}</span>
-                          <button
-                            className="apply-quick-button"
-                            onClick={() => handleQuickApply(job.id)}
-                          >
-                            Quick Apply
-                            <Icon name="arrow" size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <button className="view-more-button">
-                  View All Matches
-                  <Icon name="arrow" size={16} />
-                </button>
-              </div>
-
-              {/* Profile Completion */}
-              <div className="sidebar-card profile-card">
-                <div className="sidebar-card-header">
-                  <h3 className="sidebar-title">Profile Strength</h3>
-                  <span className="profile-percentage">{displayUserProfile.profileComplete}%</span>
-                </div>
-
-                <div className="progress-container">
-                  <div className="progress-bar-bg">
-                    <div
-                      className="progress-bar-fill"
-                      style={{ width: `${displayUserProfile.profileComplete}%` }}
-                    ></div>
-                  </div>
-                </div>
-
-                <div className="profile-tasks">
-                  {profileChecklist.map((item) => (
-                    <div key={item.label} className={`task-item ${item.completed ? 'completed' : ''}`}>
-                      <div className={`task-check ${item.completed ? '' : 'empty'}`}>
-                        {item.completed && <Icon name="check" size={14} />}
-                      </div>
-                      <span>{item.label}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <button className="complete-profile-button" onClick={() => setShowProfile(true)}>
-                  Complete Profile
-                  <Icon name="arrow" size={16} />
-                </button>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="sidebar-card quick-actions-card">
-                <h3 className="sidebar-title quick-actions-title">Quick Actions</h3>
-                <div className="quick-actions">
-                  <button className="quick-action-btn">
-                    <Icon name="plus" size={18} />
-                    New Application
-                  </button>
-                  <button className="quick-action-btn">
-                    <Icon name="bookmark" size={18} />
-                    Saved Jobs
-                  </button>
-                </div>
-              </div>
-
-            </aside>
-          </div>
-            </>
-          )}
-        </div>
-      </main>
+        <main className="retro-main">
+          {renderContent()}
+        </main>
+      </div>
     </div>
   );
 }
