@@ -210,7 +210,7 @@ const SignUp = ({ onSwitchToLogin }) => {
           <div className="terms-checkbox">
             <label>
               <input type="checkbox" required />
-              <span>I agree to the <span className="terms-link">Terms & Conditions</span></span>
+              <span className="agree">I agree to the <span className="terms-link">Terms & Conditions</span></span>
             </label>
           </div>
 
@@ -224,7 +224,7 @@ const SignUp = ({ onSwitchToLogin }) => {
         </form>
 
         <div className="signup-footer">
-          <p>Already have an account? <button type="button" className="terms-link" style={{ background: 'none', border: 'none', padding: 0 }} onClick={onSwitchToLogin}>Login</button></p>
+          <p>Already have an account? <button type="button" className="terms-link" onClick={onSwitchToLogin}>Login</button></p>
         </div>
       </div>
     </div>
