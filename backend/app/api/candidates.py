@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any, cast
 import json
 import logging
 from ..core.dependencies import get_db, get_current_active_user
-from ..models import User, Candidate, Application, Job, ApplicationStatus, SavedJob, Notification
+from ..models import User, Candidate, Application, Job, ApplicationStatus, SavedJob, Notification, JobStatus
 from ..schemas import (
     Candidate as CandidateSchema,
     CandidateUpdate,
@@ -69,7 +69,8 @@ def _candidate_payload(candidate: Any, user: Any) -> Dict[str, Any]:
     return data
 
 
-def _ensure_notification(db: Session, candidate_id: Any, type_: str, title: str, message: str, job_id: Optional[int] = None):
+def _ensure_notification(db: Session, candidate_id: Any, type_: str, title: str, message: str,
+                         job_id: Optional[int] = None):
     existing = db.query(Notification).filter(
         Notification.candidate_id == candidate_id,
         Notification.type == type_,
@@ -94,8 +95,8 @@ def _ensure_notification(db: Session, candidate_id: Any, type_: str, title: str,
 
 @router.get("/me", response_model=CandidateSchema)
 def get_my_profile(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
     """Get current candidate's profile."""
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
@@ -111,9 +112,9 @@ def get_my_profile(
 
 @router.put("/me", response_model=CandidateSchema)
 def update_my_profile(
-    candidate_data: CandidateUpdate,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        candidate_data: CandidateUpdate,
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
     """Update current candidate's profile."""
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
@@ -202,9 +203,9 @@ def update_my_profile(
 
 @router.get("/me/matches", response_model=MatchesResponse)
 def get_job_matches(
-    top_k: int = 10,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        top_k: int = 10,
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
     """Get AI-powered job matches for current candidate.
 
@@ -369,8 +370,8 @@ def get_job_matches(
 
 @router.get("/me/career-path", response_model=CareerPathResponse)
 def get_career_path(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
     """Get AI-powered career path recommendations for the current candidate."""
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
@@ -407,12 +408,28 @@ def get_career_path(
 
 
 @router.post("/me/interview-tips")
-def get_interview_tips(
-    job_id: int,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+def post_interview_tips(
+        payload: Dict[str, Any] = None,
+        job_id: Optional[int] = None,
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
-    """Get interview preparation tips for a specific job."""
+    """Get interview preparation tips for internal or external jobs.
+
+    For internal jobs: include job_id in query params and checks application status
+    For external jobs: include job_data in POST body, no application check
+    """
+    # Handle both query param and POST payload
+    if payload is None:
+        payload = {}
+
+    if not isinstance(payload, dict):
+        payload = {"job_data": payload}
+
+    # Extract job_id from query params if not in payload
+    if job_id and not payload.get("job_id"):
+        payload["job_id"] = job_id
+
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
 
     if not candidate:
@@ -421,42 +438,58 @@ def get_interview_tips(
             detail="Candidate profile not found"
         )
 
-    job = db.query(Job).filter(Job.id == job_id).first()
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Job not found"
-        )
+    job_id_param = payload.get("job_id")
+    job_data = payload.get("job_data")
 
-    application = db.query(Application).filter(
-        Application.job_id == job_id,
-        Application.candidate_id == candidate.id,
-    ).first()
-    if not application or application.status != ApplicationStatus.INTERVIEW:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Interview tips are available only after you've been selected for interview."
-        )
+    # Determine if internal or external job
+    if job_id_param and isinstance(job_id_param, int):
+        # Internal job - fetch from database and check application status
+        job = db.query(Job).filter(Job.id == job_id_param).first()
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Job not found"
+            )
+
+        application = db.query(Application).filter(
+            Application.job_id == job_id_param,
+            Application.candidate_id == candidate.id,
+        ).first()
+        if not application or application.status != ApplicationStatus.INTERVIEW:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Interview tips are available only after you've been selected for interview."
+            )
+
+        job_title = job.title
+        job_description = job.description
+    elif job_data:
+        # External job - use provided data, no application check
+        job_title = job_data.get("title", "")
+        job_description = job_data.get("description", "")
+    else:
+        raise HTTPException(status_code=400, detail="job_id or job_data is required")
 
     try:
         from ..services.gemini_service import get_gemini_service
         gemini_service = get_gemini_service()
-        
+
         work_exp = candidate.work_experience
         if isinstance(work_exp, str):
             try:
                 work_exp = json.loads(work_exp)
             except:
                 work_exp = []
-        
-        exp_summary = "; ".join([str(e)[:50] for e in work_exp[:3]]) if isinstance(work_exp, list) else str(work_exp)[:100]
-        
+
+        exp_summary = "; ".join([str(e)[:50] for e in work_exp[:3]]) if isinstance(work_exp, list) else str(work_exp)[
+            :100]
+
         tips = gemini_service.generate_interview_tips(
-            job_title=job.title,
-            job_description=job.description,
+            job_title=job_title,
+            job_description=job_description,
             candidate_experience=exp_summary
         )
-        
+
         return {'interview_tips': tips}
     except Exception as e:
         logger.error(f"Error generating interview tips: {e}")
@@ -465,9 +498,9 @@ def get_interview_tips(
 
 @router.post("/me/cv-optimization")
 def get_cv_optimization_tips(
-    section: str,  # e.g., "summary", "skills", "experience"
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        section: str,  # e.g., "summary", "skills", "experience"
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
     """Get AI suggestions to optimize a CV section."""
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
@@ -481,7 +514,7 @@ def get_cv_optimization_tips(
     try:
         from ..services.gemini_service import get_gemini_service
         gemini_service = get_gemini_service()
-        
+
         section_text = ""
         if section == "summary":
             section_text = candidate.profile_summary or ""
@@ -502,7 +535,7 @@ def get_cv_optimization_tips(
             section_name=section,
             current_text=section_text
         )
-        
+
         return {'optimized_text': optimized}
     except Exception as e:
         logger.error(f"Error optimizing CV section: {e}")
@@ -511,9 +544,9 @@ def get_cv_optimization_tips(
 
 @router.post("/me/applications")
 def apply_for_job(
-    application_data: ApplicationCreate,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        application_data: ApplicationCreate,
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
     """Apply for a job."""
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
@@ -601,8 +634,8 @@ def apply_for_job(
 
 @router.get("/me/applications", response_model=List[ApplicationSchema])
 def get_my_applications(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
     """Get all applications submitted by current candidate."""
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
@@ -622,15 +655,16 @@ def get_my_applications(
 
 @router.get("/me/saved-jobs")
 def get_saved_jobs(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate profile not found")
 
     saved_jobs = []
-    for saved in db.query(SavedJob).filter(SavedJob.candidate_id == candidate.id).order_by(SavedJob.saved_at.desc()).all():
+    for saved in db.query(SavedJob).filter(SavedJob.candidate_id == candidate.id).order_by(
+            SavedJob.saved_at.desc()).all():
         if saved.source == "internal":
             # Internal job
             job = db.query(Job).filter(Job.id == saved.job_id).first()
@@ -670,9 +704,9 @@ def get_saved_jobs(
 
 @router.post("/me/saved-jobs")
 def save_job_for_current_candidate(
-    payload: Dict[str, Any],
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        payload: Dict[str, Any],
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
     if not candidate:
@@ -696,7 +730,7 @@ def save_job_for_current_candidate(
         job = db.query(Job).filter(Job.id == job_id).first()
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
-        
+
         existing = db.query(SavedJob).filter(SavedJob.candidate_id == candidate.id, SavedJob.job_id == job.id).first()
         if existing:
             return {"message": "Job already saved", "saved_job_id": existing.id}
@@ -736,9 +770,9 @@ def save_job_for_current_candidate(
 
 @router.delete("/me/saved-jobs/{job_id}")
 def remove_saved_job(
-    job_id: str,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        job_id: str,
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
     if not candidate:
@@ -747,10 +781,12 @@ def remove_saved_job(
     # Try to parse as integer for internal jobs
     try:
         internal_job_id = int(job_id)
-        saved = db.query(SavedJob).filter(SavedJob.candidate_id == candidate.id, SavedJob.job_id == internal_job_id).first()
+        saved = db.query(SavedJob).filter(SavedJob.candidate_id == candidate.id,
+                                          SavedJob.job_id == internal_job_id).first()
     except ValueError:
         # External job ID - use external_job_id field
-        saved = db.query(SavedJob).filter(SavedJob.candidate_id == candidate.id, SavedJob.external_job_id == job_id).first()
+        saved = db.query(SavedJob).filter(SavedJob.candidate_id == candidate.id,
+                                          SavedJob.external_job_id == job_id).first()
 
     if not saved:
         raise HTTPException(status_code=404, detail="Saved job not found")
@@ -762,8 +798,8 @@ def remove_saved_job(
 
 @router.get("/me/notifications")
 def get_candidate_notifications(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
     if not candidate:
@@ -818,7 +854,8 @@ def get_candidate_notifications(
                 job.id,
             )
 
-    notifications = db.query(Notification).filter(Notification.candidate_id == candidate.id).order_by(Notification.created_at.desc()).limit(50).all()
+    notifications = db.query(Notification).filter(Notification.candidate_id == candidate.id).order_by(
+        Notification.created_at.desc()).limit(50).all()
     return [
         {
             "id": item.id,
@@ -836,9 +873,9 @@ def get_candidate_notifications(
 
 @router.put("/me/notifications/{notification_id}/read")
 def mark_notification_read(
-    notification_id: int,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        notification_id: int,
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
     if not candidate:
@@ -859,11 +896,11 @@ def mark_notification_read(
 
 @router.get("/me/match-analysis")
 def get_match_analysis(
-    job_id: int,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        job_id: int,
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
-    """Get detailed match analysis for a specific job."""
+    """Get detailed match analysis for an internal job."""
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate profile not found")
@@ -875,13 +912,13 @@ def get_match_analysis(
     try:
         from ..services.gemini_service import get_gemini_service
         gemini = get_gemini_service()
-        
+
         candidate_skills = []
         try:
             candidate_skills = json.loads(candidate.skills) if candidate.skills else []
         except:
             candidate_skills = []
-        
+
         job_requirements = []
         try:
             job_requirements = json.loads(job.requirements) if job.requirements else []
@@ -918,13 +955,86 @@ def get_match_analysis(
         }
 
 
+@router.post("/me/match-analysis")
+def post_match_analysis(
+        payload: Dict[str, Any],
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
+):
+    """Get detailed match analysis for internal or external jobs.
+
+    For internal jobs: include job_id
+    For external jobs: include job_data with title, description, requirements
+    """
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+
+    job_id = payload.get("job_id")
+    job_data = payload.get("job_data")
+
+    # Determine if internal or external job
+    if job_id and isinstance(job_id, int):
+        # Internal job - fetch from database
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        job_title = job.title
+        job_description = job.description
+        job_requirements = []
+        try:
+            job_requirements = json.loads(job.requirements) if job.requirements else []
+        except:
+            job_requirements = [job.requirements] if job.requirements else []
+    elif job_data:
+        # External job - use provided data
+        job_title = job_data.get("title", "")
+        job_description = job_data.get("description", "")
+        job_requirements = job_data.get("requirements", [])
+        if isinstance(job_requirements, str):
+            try:
+                job_requirements = json.loads(job_requirements)
+            except:
+                job_requirements = [job_requirements] if job_requirements else []
+    else:
+        raise HTTPException(status_code=400, detail="job_id or job_data is required")
+
+    try:
+        from ..services.gemini_service import get_gemini_service
+        gemini = get_gemini_service()
+
+        candidate_skills = []
+        try:
+            candidate_skills = json.loads(candidate.skills) if candidate.skills else []
+        except:
+            candidate_skills = []
+
+        analysis = gemini.analyze_match_details(
+            job_title=job_title,
+            job_description=job_description,
+            job_requirements=job_requirements,
+            candidate_skills=candidate_skills,
+            candidate_experience=candidate.resume_text[:300] if candidate.resume_text else "",
+            match_score=0.0
+        )
+        return analysis
+    except Exception as e:
+        logger.error(f"Error analyzing match: {e}")
+        return {
+            "summary": "Analysis temporarily unavailable",
+            "strengths": [],
+            "gaps": [],
+            "recommendations": ""
+        }
+
+
 @router.get("/me/resume-tailoring")
 def get_resume_tailoring(
-    job_id: int,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        job_id: int,
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
-    """Get resume tailoring suggestions for a specific job."""
+    """Get resume tailoring suggestions for an internal job."""
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate profile not found")
@@ -936,7 +1046,7 @@ def get_resume_tailoring(
     try:
         from ..services.gemini_service import get_gemini_service
         gemini = get_gemini_service()
-        
+
         suggestions = gemini.get_resume_tailoring_suggestions(
             job_title=job.title,
             job_description=job.description,
@@ -948,10 +1058,58 @@ def get_resume_tailoring(
         return {"suggestions": "Tailoring suggestions not available"}
 
 
+@router.post("/me/resume-tailoring")
+def post_resume_tailoring(
+        payload: Dict[str, Any],
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
+):
+    """Get resume tailoring suggestions for internal or external jobs.
+
+    For internal jobs: include job_id
+    For external jobs: include job_data with title, description
+    """
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+
+    job_id = payload.get("job_id")
+    job_data = payload.get("job_data")
+
+    # Determine if internal or external job
+    if job_id and isinstance(job_id, int):
+        # Internal job - fetch from database
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        job_title = job.title
+        job_description = job.description
+    elif job_data:
+        # External job - use provided data
+        job_title = job_data.get("title", "")
+        job_description = job_data.get("description", "")
+    else:
+        raise HTTPException(status_code=400, detail="job_id or job_data is required")
+
+    try:
+        from ..services.gemini_service import get_gemini_service
+        gemini = get_gemini_service()
+
+        suggestions = gemini.get_resume_tailoring_suggestions(
+            job_title=job_title,
+            job_description=job_description,
+            current_resume=candidate.resume_text[:500] if candidate.resume_text else candidate.profile_summary or ""
+        )
+        return {"suggestions": suggestions}
+    except Exception as e:
+        logger.error(f"Error getting resume tailoring: {e}")
+        return {"suggestions": "Tailoring suggestions not available"}
+
+
 @router.get("/me/profile-improvement")
 def get_profile_improvement(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
     """Get tips to improve profile and stand out."""
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
@@ -961,7 +1119,7 @@ def get_profile_improvement(
     try:
         from ..services.gemini_service import get_gemini_service
         gemini = get_gemini_service()
-        
+
         skills = []
         try:
             skills = json.loads(candidate.skills) if candidate.skills else []
@@ -982,24 +1140,24 @@ def get_profile_improvement(
 
 @router.post("/me/chat")
 def chat_with_gemini(
-    request: ChatRequest,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        request: ChatRequest,
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
     """Chat with Gemini career advisor."""
     try:
         logger.info(f"💬 Chat request from user {current_user.id}: '{request.message[:50]}'")
-        
+
         from ..services.gemini_service import get_gemini_service
         gemini = get_gemini_service()
-        
+
         # Verify Gemini is enabled
         if not gemini.enabled:
             logger.warning(f"⚠️ Gemini not enabled for user {current_user.id}")
             return {
                 "response": "AI features are currently unavailable. Please check your Gemini API key configuration."
             }
-        
+
         # Call Gemini service with optional context
         response = gemini.chat(request.message, request.history, context=getattr(request, 'context', None))
 
@@ -1008,10 +1166,10 @@ def chat_with_gemini(
             return {
                 "response": "I couldn't generate a response. Please try again."
             }
-        
+
         logger.info(f"✅ Chat response sent to user {current_user.id}")
         return {"response": response}
-        
+
     except Exception as e:
         logger.error(f"❌ Error in chat endpoint: {type(e).__name__}: {e}")
         import traceback
@@ -1023,36 +1181,36 @@ def chat_with_gemini(
 
 @router.post("/me/button-context")
 def get_button_context(
-    button_request: Dict[str, Any],
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+        button_request: Dict[str, Any],
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
 ):
     """
     Get orchestrated context for a button click in JobPortal.
-    
+
     Combines ML model insights + Gemini LLM for intelligent analysis.
     Used when user clicks: Match Details, Interview Tips, Tailor Resume, Help Stand Out
     """
     try:
         button_type = button_request.get('button_type', 'match_details')
         job_id = button_request.get('job_id')
-        
+
         if not job_id:
             raise HTTPException(status_code=400, detail="job_id is required")
-        
+
         # Get candidate and job
         candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
         if not candidate:
             raise HTTPException(status_code=404, detail="Candidate profile not found")
-        
+
         job = db.query(Job).filter(Job.id == job_id).first()
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
-        
+
         # Get orchestrator
         from ..services.orchestrator_service import get_orchestrator
         orchestrator = get_orchestrator(ai_service)
-        
+
         # Prepare candidate data
         candidate_data = {
             "id": candidate.id,
@@ -1062,14 +1220,14 @@ def get_button_context(
             "education": candidate.education or "",
             "years_of_experience": candidate.experience_years or 0,
         }
-        
+
         # Parse skills
         try:
             skills_json = json.loads(candidate.skills) if candidate.skills else []
             candidate_data["skills"] = skills_json if isinstance(skills_json, list) else []
         except:
             candidate_data["skills"] = []
-        
+
         # Prepare job data
         job_data = {
             "id": job.id,
@@ -1079,14 +1237,14 @@ def get_button_context(
             "requirements": [],
             "company": getattr(job, 'company', 'Unknown Company')
         }
-        
+
         # Parse requirements
         try:
             reqs_json = json.loads(job.requirements) if job.requirements else []
             job_data["requirements"] = reqs_json if isinstance(reqs_json, list) else []
         except:
             job_data["requirements"] = []
-        
+
         # Get ML insights if available
         ml_insights = {}
         if candidate.embedding and job.embedding:
@@ -1099,7 +1257,7 @@ def get_button_context(
                 ml_insights['match_score'] = match_score
             except:
                 ml_insights['match_score'] = 0.0
-        
+
         # Get orchestrated context
         context = orchestrator.analyze_button_context(
             button_type=button_type,
@@ -1107,10 +1265,10 @@ def get_button_context(
             candidate_data=candidate_data,
             ml_insights=ml_insights
         )
-        
+
         logger.info(f"✅ Button context generated for {button_type} on job {job_id}")
         return context
-        
+
     except HTTPException:
         raise
     except Exception as e:
