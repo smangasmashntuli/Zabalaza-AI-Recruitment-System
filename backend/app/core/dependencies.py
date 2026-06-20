@@ -99,6 +99,7 @@ def get_current_recruiter_user(
 
 def validate_file_type(file: UploadFile) -> UploadFile:
     """Validate uploaded file type."""
+
     file_extension = os.path.splitext(file.filename or "")[1].lower()
     if file.content_type not in ALLOWED_FILE_TYPES and file_extension not in ALLOWED_FILE_EXTENSIONS:
         raise HTTPException(
