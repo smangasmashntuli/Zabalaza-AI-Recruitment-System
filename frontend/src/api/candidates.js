@@ -33,7 +33,15 @@ export const getCareerPath = async () => {
 /**
  * Get interview tips for a specific job
  */
-export const getInterviewTips = async (jobId) => {
+export const getInterviewTips = async (jobId, jobData = null) => {
+  if (jobData && !Number.isInteger(jobId)) {
+    // External job - use POST with job_data
+    return post(`${API_ENDPOINTS.CANDIDATES}/me/interview-tips`, {
+      job_id: jobId,
+      job_data: jobData
+    });
+  }
+  // Internal job - use POST with query param (backward compatible)
   return post(`${API_ENDPOINTS.CANDIDATES}/me/interview-tips?job_id=${encodeURIComponent(jobId)}`, {});
 };
 
@@ -47,14 +55,30 @@ export const optimizeCvSection = async (section) => {
 /**
  * Get detailed match analysis for a job
  */
-export const getMatchAnalysis = async (jobId) => {
+export const getMatchAnalysis = async (jobId, jobData = null) => {
+  if (jobData && !Number.isInteger(jobId)) {
+    // External job - use POST with job_data
+    return post(`${API_ENDPOINTS.CANDIDATES}/me/match-analysis`, {
+      job_id: jobId,
+      job_data: jobData
+    });
+  }
+  // Internal job - use GET (backward compatible)
   return get(`${API_ENDPOINTS.CANDIDATES}/me/match-analysis?job_id=${jobId}`);
 };
 
 /**
  * Get resume tailoring suggestions for a job
  */
-export const getResumeTailoringTips = async (jobId) => {
+export const getResumeTailoringTips = async (jobId, jobData = null) => {
+  if (jobData && !Number.isInteger(jobId)) {
+    // External job - use POST with job_data
+    return post(`${API_ENDPOINTS.CANDIDATES}/me/resume-tailoring`, {
+      job_id: jobId,
+      job_data: jobData
+    });
+  }
+  // Internal job - use GET (backward compatible)
   return get(`${API_ENDPOINTS.CANDIDATES}/me/resume-tailoring?job_id=${jobId}`);
 };
 
