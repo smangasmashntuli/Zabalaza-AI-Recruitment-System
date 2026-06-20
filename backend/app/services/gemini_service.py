@@ -42,13 +42,13 @@ except ImportError:
 class GeminiService:
     """LLM-powered intelligence layer using Google Gemini."""
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-1.5-flash"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-flash"):
         """
         Initialize Gemini service.
 
         Args:
             api_key: Gemini API key (if None, uses GEMINI_API_KEY env var)
-            model: Model name (default: gemini-1.5-flash)
+            model: Model name (default: gemini-2.5-flash)
         """
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
         self.model_name = model
@@ -427,11 +427,27 @@ Return ONLY the 2-3 sentence pitch.
     ) -> Dict:
         """Generate detailed match analysis with strengths and gaps."""
         if not self.enabled:
+            # Provide a useful heuristic fallback
+            matching_skills = []
+            missing_skills = []
+            if candidate_skills:
+                req_lower = [r.lower() for r in job_requirements]
+                for skill in candidate_skills:
+                    skill_lower = skill.lower()
+                    if any(skill_lower in req or req in skill_lower for req in req_lower):
+                        matching_skills.append(skill)
+                    else:
+                        missing_skills.append(skill)
+            match_pct = int(match_score * 100)
+            strengths = matching_skills[:3] if matching_skills else ["Your profile matches the job domain"]
+            gaps = missing_skills[:2] if missing_skills else ["Add more specific job-related keywords to your profile"]
             return {
-                "summary": "Match analysis not available",
-                "strengths": [],
-                "gaps": [],
-                "recommendations": ""
+                "summary": f"Your profile shows a {match_pct}% match with {job_title}. "
+                           f"You have {len(matching_skills)} matching skills out of {len(job_requirements)} requirements. "
+                           f"Strengthening your profile with more targeted keywords and experience could improve your match.",
+                "strengths": strengths,
+                "gaps": gaps,
+                "recommendations": "Update your profile with relevant skills and experience for this role."
             }
 
         try:
@@ -467,11 +483,13 @@ Return a JSON object with exactly this format (no markdown):
                 }
         except Exception as e:
             logger.error(f"❌ Error analyzing match details: {e}")
+            # Heuristic fallback on error too
+            matching_skills = [s for s in candidate_skills if any(s.lower() in r.lower() or r.lower() in s.lower() for r in job_requirements)]
             return {
-                "summary": "Analysis error",
-                "strengths": [],
-                "gaps": [],
-                "recommendations": ""
+                "summary": f"Match assessment for {job_title}. Based on skill overlap, we found {len(matching_skills)} matching areas.",
+                "strengths": matching_skills[:3] or ["Domain alignment"],
+                "gaps": [r for r in job_requirements[:3] if not any(s.lower() in r.lower() for s in candidate_skills)],
+                "recommendations": "Consider highlighting transferable skills and relevant experience in your application."
             }
 
     def get_resume_tailoring_suggestions(
@@ -482,7 +500,16 @@ Return a JSON object with exactly this format (no markdown):
     ) -> str:
         """Get specific suggestions to tailor resume for this job."""
         if not self.enabled:
-            return "Resume tailoring suggestions not available."
+            # Provide useful heuristic fallback
+            return f"""Here are some tips to tailor your resume for {job_title}:
+
+1. **Keywords**: Review the job description and incorporate relevant keywords and phrases throughout your resume.
+2. **Highlight Experience**: Focus on experience that directly relates to the responsibilities mentioned in the job description.
+3. **Skills Section**: Ensure your skills section reflects the skills listed in the job requirements.
+4. **Achievements**: Quantify your achievements with metrics where possible (e.g., "improved efficiency by 20%").
+5. **ATS Optimization**: Use standard section headings (Experience, Education, Skills) and avoid graphics/tables.
+
+Upload your resume to get personalized suggestions."""
 
         try:
             prompt = f"""
