@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import './JobPortal.css';
-import { getHybridJobs, searchHybridJobs } from './api/jobs';
+import { getHybridJobs } from './api/jobs'; // Only import getHybridJobs
 import {
   applyForJob,
   chatWithGemini,
@@ -75,6 +75,8 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
   const [matchQuestion, setMatchQuestion] = useState('');
   const [matchMessages, setMatchMessages] = useState([]);
   const [matchAsking, setMatchAsking] = useState(false);
+  const [viewedJobIds, setViewedJobIds] = useState([]);
+  const [appliedJobIds, setAppliedJobIds] = useState([]);
 
   const hasResumeProfile = Boolean(candidateProfile?.resume_path || candidateProfile?.resume_text);
 
@@ -93,11 +95,36 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
     setLocationFilter(initialLocation || '');
   }, [initialLocation]);
 
+  useEffect(() => {
+    if (selectedJob && selectedJob.id && !viewedJobIds.includes(selectedJob.id)) {
+      setViewedJobIds((prev) => [...new Set([...prev, selectedJob.id])]);
+    }
+  }, [selectedJob]);
+
+  useEffect(() => {
+    if (myApplications.length > 0) {
+      const appliedIds = myApplications.map((app) => app.job_id);
+      setAppliedJobIds((prev) => [...new Set([...prev, ...appliedIds])]);
+    }
+  }, [myApplications]);
+
   const fetchJobsData = async () => {
     try {
       setLoading(true);
       setError(null);
-      const jobsData = await getHybridJobs({ limit: 50, include_external: true });
+
+      // Build params for getHybridJobs
+      const params = {
+        limit: 50,
+        include_external: true
+      };
+
+      // Add search parameters if they exist
+      if (searchQuery) params.query = searchQuery;
+      if (locationFilter) params.location = locationFilter;
+      if (typeFilter !== 'all') params.jobType = typeFilter;
+
+      const jobsData = await getHybridJobs(params);
       setJobs(jobsData || []);
     } catch (err) {
       setError(err.message || 'Failed to load jobs');
@@ -135,21 +162,7 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
   };
 
   const handleSearch = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const results = await searchHybridJobs({
-        query: searchQuery,
-        location: locationFilter,
-        jobType: typeFilter !== 'all' ? typeFilter : undefined,
-        limit: 50,
-      });
-      setJobs(results || []);
-    } catch (err) {
-      setError(err.message || 'Failed to search jobs');
-    } finally {
-      setLoading(false);
-    }
+    await fetchJobsData(); // Re-fetch with current search parameters
   };
 
   const formatJob = (job) => {
@@ -211,52 +224,51 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
     return ['interview', 'interview_scheduled'].includes(status);
   };
 
-   const handleSaveJob = async (job) => {
-     const jobId = job.job_id || job.id;
-     const source = job.source || "internal";
-     const externalJobId = job.external_job_id || job.id;
+  const handleSaveJob = async (job) => {
+    const jobId = job.job_id || job.id;
+    const source = job.source || "internal";
+    const externalJobId = job.external_job_id || job.id;
 
-     if (!jobId && !job.title) return;
-     try {
-       setActionNotice('');
-       setSavingJobIds((current) => [...new Set([...current, jobId || externalJobId])]);
-       
-       // Prepare payload based on job source
-       const payload = {
-         job_id: source === "internal" ? jobId : null,
-         source: source,
-         external_job_id: source !== "internal" ? externalJobId : null,
-         job_data: source !== "internal" ? {
-           id: job.id,
-           job_id: job.job_id,
-           title: job.title,
-           description: job.description,
-           company: job.company,
-           location: job.location,
-           salary_min: job.salary_min,
-           salary_max: job.salary_max,
-           job_type: job.job_type,
-           posted: job.posted,
-           source: source,
-         } : null
-       };
+    if (!jobId && !job.title) return;
+    try {
+      setActionNotice('');
+      setSavingJobIds((current) => [...new Set([...current, jobId || externalJobId])]);
 
-       await saveJob(payload);
-       await fetchSavedJobsData();
-       setActionNotice(`${job.title} saved successfully.`);
-     } catch (err) {
-       setActionNotice(err.message || 'Could not save the job.');
-     } finally {
-       setSavingJobIds((current) => current.filter((id) => id !== (jobId || externalJobId)));
-     }
-   };
+      const payload = {
+        job_id: source === "internal" ? jobId : null,
+        source: source,
+        external_job_id: source !== "internal" ? externalJobId : null,
+        job_data: source !== "internal" ? {
+          id: job.id,
+          job_id: job.job_id,
+          title: job.title,
+          description: job.description,
+          company: job.company,
+          location: job.location,
+          salary_min: job.salary_min,
+          salary_max: job.salary_max,
+          job_type: job.job_type,
+          posted: job.posted,
+          source: source,
+        } : null
+      };
+
+      await saveJob(payload);
+      await fetchSavedJobsData();
+      setActionNotice(`${job.title} saved successfully.`);
+    } catch (err) {
+      setActionNotice(err.message || 'Could not save the job.');
+    } finally {
+      setSavingJobIds((current) => current.filter((id) => id !== (jobId || externalJobId)));
+    }
+  };
 
   const handleInterviewTips = async () => {
     if (!selectedJob) return;
 
     const jobId = selectedJob.job_id || selectedJob.id;
-    if (!jobId || (selectedJob.source && selectedJob.source !== 'internal')) {
-      setInterviewTipsError('Interview tips are only available for internal jobs right now.');
+    if (!jobId) {
+      setInterviewTipsError('Job ID is required to generate interview tips.');
       return;
     }
 
@@ -268,7 +280,7 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
     try {
       setInterviewTipsLoading(true);
       setInterviewTipsError('');
-      const result = await getInterviewTips(jobId);
+      const result = await getInterviewTips(jobId, selectedJob);
       setInterviewTips(result?.interview_tips || 'No interview tips were generated.');
       setExpandedSection('interview-tips');
     } catch (err) {
@@ -282,8 +294,8 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
     if (!selectedJob) return;
 
     const jobId = selectedJob.job_id || selectedJob.id;
-    if (!jobId || (selectedJob.source && selectedJob.source !== 'internal')) {
-      setActionNotice('Match details are only available for internal jobs.');
+    if (!jobId) {
+      setActionNotice('Job ID is required to view match details.');
       return;
     }
 
@@ -291,7 +303,7 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
       setMatchAnalysisLoading(true);
       const [contextResult, analysisResult] = await Promise.all([
         getButtonContext('match_details', selectedJob),
-        getMatchAnalysis(jobId),
+        getMatchAnalysis(jobId, selectedJob),
       ]);
       setMatchModalData(contextResult);
       setMatchAnalysis(analysisResult);
@@ -316,14 +328,14 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
     if (!selectedJob) return;
 
     const jobId = selectedJob.job_id || selectedJob.id;
-    if (!jobId || (selectedJob.source && selectedJob.source !== 'internal')) {
-      setActionNotice('Resume tailoring is only available for internal jobs.');
+    if (!jobId) {
+      setActionNotice('Job ID is required to tailor your resume.');
       return;
     }
 
     try {
       setTailoringLoading(true);
-      const result = await getResumeTailoringTips(jobId);
+      const result = await getResumeTailoringTips(jobId, selectedJob);
       setResumeTailoringTips(result?.suggestions || 'No suggestions available.');
       setExpandedSection('tailor-resume');
     } catch (err) {
@@ -337,8 +349,8 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
     if (!selectedJob) return;
 
     const jobId = selectedJob.job_id || selectedJob.id;
-    if (!jobId || (selectedJob.source && selectedJob.source !== 'internal')) {
-      setActionNotice('This feature is only available for internal jobs.');
+    if (!jobId) {
+      setActionNotice('Job ID is required to generate improvement suggestions.');
       return;
     }
 
@@ -360,10 +372,12 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
 
     try {
       setApplying(true);
+      const jobId = selectedJob.job_id || selectedJob.id;
       await applyForJob({
-        job_id: selectedJob.job_id || selectedJob.id,
+        job_id: jobId,
         cover_letter: applicationData.coverLetter || `Application for ${selectedJob.title}`,
       });
+      setAppliedJobIds((prev) => [...new Set([...prev, jobId])]);
       setShowApplicationModal(false);
       setSelectedJob(null);
       setApplicationData({ coverLetter: '' });
@@ -471,7 +485,7 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
             {filteredJobs.length === 0 ? (
               <div className="no-jobs-message">No jobs found</div>
             ) : (
-              filteredJobs.map((job, index) => {
+              filteredJobs.map((job) => {
                 const formattedJob = formatJob(job);
                 const isSelected = selectedJob?.id === job.id;
                 return (
@@ -488,7 +502,6 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
                       </div>
                       <button className="close-item-button" onClick={(e) => {
                         e.stopPropagation();
-                        // You can add remove functionality here if needed
                       }}>
                         <Icon name="close" size={14} />
                       </button>
@@ -498,7 +511,8 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
                       <span className="list-detail">{formattedJob.type}</span>
                     </div>
                     <div className="list-item-meta">
-                      {index < 3 && <span className="list-meta-badge">Recently viewed</span>}
+                      {appliedJobIds.includes(job.id) && <span className="list-meta-badge">Applied</span>}
+                      {viewedJobIds.includes(job.id) && !appliedJobIds.includes(job.id) && <span className="list-meta-badge">Recently viewed</span>}
                     </div>
                   </div>
                 );
@@ -514,17 +528,6 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
               const formattedJob = formatJob(selectedJob);
               return (
                 <div className="job-details-content">
-                  {/* Header with back button and navigation */}
-                  <div className="details-header-top">
-                    <button className="back-button" onClick={() => setSelectedJob(null)}>
-                      <Icon name="close" size={20} />
-                    </button>
-                    <div className="details-nav-actions">
-                      <button className="nav-button" title="Previous"><Icon name="location" size={18} /></button>
-                      <button className="nav-button" title="Menu"><span style={{fontSize: '20px', fontWeight: 'bold'}}>⋯</span></button>
-                    </div>
-                  </div>
-
                   {/* Company Header */}
                   <div className="details-company-header">
                     <div className="company-logo-large">{formattedJob.logo}</div>
@@ -563,7 +566,7 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
                       </div>
                       {actionNotice && <p className="details-action-notice">{actionNotice}</p>}
                       <div className="match-actions">
-                        <button 
+                        <button
                           className="match-action-button"
                           onClick={handleMatchDetails}
                           disabled={matchAnalysisLoading}
@@ -571,7 +574,7 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
                           <Icon name="star" size={18} />
                           {matchAnalysisLoading ? 'Analyzing...' : 'Show match details'}
                         </button>
-                        <button 
+                        <button
                           className="match-action-button"
                           onClick={handleTailorResume}
                           disabled={tailoringLoading}
@@ -579,7 +582,7 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
                           <Icon name="briefcase" size={18} />
                           {tailoringLoading ? 'Tailoring...' : 'Tailor my resume'}
                         </button>
-                        <button 
+                        <button
                           className="match-action-button"
                           onClick={handleHelpStandOut}
                           disabled={improvementLoading}
@@ -856,4 +859,3 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
     </div>
   );
 }
-
