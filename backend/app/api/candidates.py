@@ -828,17 +828,28 @@ def get_candidate_notifications(
 
     if candidate.embedding:
         try:
-            matches_payload = get_job_matches(3, current_user=current_user, db=db)
-            for match in matches_payload.get("items", []) if isinstance(matches_payload, dict) else []:
-                if (match.get("match_score") or 0) >= 0.7:
-                    _ensure_notification(
-                        db,
-                        candidate.id,
-                        "good_match",
-                        f"Good match: {match.get('job_title', 'role')}",
-                        "You look like a strong fit for this job. Consider applying soon.",
-                        match.get("job_id"),
-                    )
+            # Get jobs the candidate hasn't applied to yet
+            applied_job_ids = [a.job_id for a in db.query(Application).filter(Application.candidate_id == candidate.id).all()]
+            candidate_emb = json.loads(candidate.embedding) if isinstance(candidate.embedding, str) else candidate.embedding
+            recent_active = db.query(Job).filter(Job.status == JobStatus.ACTIVE).order_by(Job.created_at.desc()).limit(5).all()
+            for job in recent_active:
+                if job.id in applied_job_ids:
+                    continue
+                if job.embedding:
+                    try:
+                        job_emb = json.loads(job.embedding) if isinstance(job.embedding, str) else job.embedding
+                        from ..services.matching_engine import MatchingEngine
+                        engine = MatchingEngine()
+                        score = engine.calculate_similarity(candidate_emb, job_emb)
+                        if score >= 0.7:
+                            _ensure_notification(
+                                db, candidate.id, "good_match",
+                                f"Good match: {job.title}",
+                                "You look like a strong fit for this job. Consider applying soon.",
+                                job.id,
+                            )
+                    except:
+                        pass
         except Exception:
             pass
 
