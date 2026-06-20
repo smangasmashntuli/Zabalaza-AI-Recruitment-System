@@ -10,7 +10,7 @@ import {
   getNotifications,
   getProfileImprovementTips,
 } from './api/candidates';
-import { getJobs } from './api/jobs';
+import { getJobs, createJob, getJobApplications } from './api/jobs';
 import { getDiscoverIntelligence } from './api/intelligence';
 import { getCurrentUser } from './api/auth';
 import { calculateAnalytics, calculateProfileCompletion, generateInsights } from './api/analytics';
@@ -99,6 +99,12 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
   const [recommendations, setRecommendations] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [insights, setInsights] = useState([]);
+  const [postJobForm, setPostJobForm] = useState({ title: '', description: '', location: '', job_type: 'full-time', requirements: '' });
+  const [postingJob, setPostingJob] = useState(false);
+  const [postJobMessage, setPostJobMessage] = useState('');
+  const [recruiterJobs, setRecruiterJobs] = useState([]);
+  const [selectedJobApplications, setSelectedJobApplications] = useState(null);
+  const [applicationsLoading, setApplicationsLoading] = useState(false);
 
   const fetchDashboardData = async ({ silent = false } = {}) => {
     try {
@@ -205,6 +211,40 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (activeView === 'recruiter-analytics') {
+      fetchRecruiterJobs();
+    }
+  }, [activeView]);
+
+  const fetchRecruiterJobs = async () => {
+    try {
+      const jobs = await getJobs({ limit: 100 });
+      const currentUser = getCurrentUser();
+      const userJobs = jobs.filter((job) => job.recruiter_id === currentUser?.id);
+      setRecruiterJobs(userJobs);
+    } catch (err) {
+      console.error('Failed to fetch recruiter jobs:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedJobApplications && selectedJobApplications.id) {
+      const loadApplications = async () => {
+        try {
+          setApplicationsLoading(true);
+          const apps = await getJobApplications(selectedJobApplications.id);
+          setSelectedJobApplications((prev) => ({ ...prev, applications: apps }));
+        } catch (err) {
+          console.error('Failed to load applications:', err);
+        } finally {
+          setApplicationsLoading(false);
+        }
+      };
+      loadApplications().then(r => r);
+    }
+  }, [selectedJobApplications?.id]);
+
   const displayUserProfile = userProfile || { name: '', title: '', avatar: '', profileComplete: 0 };
   const displayAnalytics = analytics || {
     applications: { value: 0, change: 0, period: 'vs last month', positive: false },
@@ -258,10 +298,8 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
   ].filter(Boolean).slice(0, 4);
 
   const businessActions = [
-    ...(discoverInsights?.job_suggestions?.title ? [{ label: discoverInsights.job_suggestions.title, description: discoverInsights.job_suggestions.description || 'Live recommendation from your career intelligence layer.' }] : []),
-    ...(discoverInsights?.industry_trends?.title ? [{ label: discoverInsights.industry_trends.title, description: discoverInsights.industry_trends.description || 'Current market signals from your field.' }] : []),
-    { label: discoverData?.news_supported ? 'Industry News Feed' : 'Connect a News API', description: discoverData?.news_supported ? 'Live news results from your configured provider.' : 'Configure a news provider API key to show real-time news here.' },
-    { label: 'Create a Company Page', description: 'Start a business profile for employer workflows.' },
+    { label: 'Post a Job', description: 'Create a job opening for your organization.' },
+    { label: 'View Applications', description: 'See all candidates who applied to your jobs.' },
   ];
 
   const filteredApplications = applications.filter((app) => {
@@ -285,8 +323,186 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
   const handleFindJobs = () => setActiveView('jobs');
   const handleBusinessAction = (label) => {
     setShowBusinessMenu(false);
-    alert(label === 'Create a Company Page' ? 'Company page creation will require verification before it is published.' : `${label} is available from the business workflow.`);
+    if (label === 'Post a Job') {
+      setActiveView('post-job');
+    } else if (label === 'View Applications') {
+      setActiveView('recruiter-analytics');
+    }
   };
+
+  const handlePostJob = async (e) => {
+    e.preventDefault();
+    if (!postJobForm.title || !postJobForm.description || !postJobForm.location) {
+      setPostJobMessage('Please fill in all required fields.');
+      return;
+    }
+    try {
+      setPostingJob(true);
+      setPostJobMessage('');
+      await createJob({
+        title: postJobForm.title,
+        description: postJobForm.description,
+        location: postJobForm.location,
+        job_type: postJobForm.job_type,
+        requirements: postJobForm.requirements,
+      });
+      setPostJobMessage('Job posted successfully!');
+      setPostJobForm({ title: '', description: '', location: '', job_type: 'full-time', requirements: '' });
+      setTimeout(() => setActiveView('overview'), 2000);
+    } catch (err) {
+      setPostJobMessage(err.message || 'Failed to post job.');
+    } finally {
+      setPostingJob(false);
+    }
+  };
+
+  const renderRecruiterAnalyticsView = () => (
+    <div className="retro-page">
+      <div className="retro-page-header">
+        <p className="retro-muted">Business Portal</p>
+        <h1>Job Applications & Analytics</h1>
+      </div>
+
+      <section className="retro-card">
+        <h2 style={{ marginBottom: '16px' }}>Your Posted Jobs</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+          {recruiterJobs.map((job) => (
+            <div key={job.id} style={{ border: '2px solid var(--ink)', borderRadius: '12px', padding: '16px', cursor: 'pointer' }} onClick={() => setSelectedJobApplications(job)}>
+              <h3 style={{ margin: '0 0 8px 0' }}>{job.title}</h3>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'var(--ink-mute)' }}>{job.location}</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong style={{ fontSize: '14px' }}>{job.application_count || 0} applications</strong>
+                <span style={{ fontSize: '12px', color: 'var(--ink-mute)' }}>Click to view</span>
+              </div>
+            </div>
+          ))}
+          {recruiterJobs.length === 0 && <p style={{ gridColumn: '1 / -1' }}>No jobs posted yet. <button className="retro-link-button" onClick={() => setActiveView('post-job')}>Post a job</button></p>}
+        </div>
+      </section>
+
+      {selectedJobApplications && (
+        <section className="retro-card" style={{ marginTop: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h2>{selectedJobApplications.title} - Applicants</h2>
+            <button className="retro-ghost-button" onClick={() => setSelectedJobApplications(null)}>Close</button>
+          </div>
+          {applicationsLoading ? <p>Loading applications...</p> : <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {selectedJobApplications.applications?.map((app) => (
+              <div key={app.id} style={{ border: '1px solid var(--line)', borderRadius: '8px', padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <strong>{app.candidate_name}</strong>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--ink-mute)' }}>{app.candidate_email}</p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ background: 'var(--yellow)', padding: '6px 12px', borderRadius: '6px', fontWeight: 'bold', marginBottom: '4px' }}>Match: {Math.round(app.match_score * 100)}%</div>
+                  <small style={{ color: 'var(--ink-mute)' }}>{new Date(app.applied_at).toLocaleDateString()}</small>
+                </div>
+              </div>
+            ))}
+            {selectedJobApplications.applications?.length === 0 && <p>No applications yet.</p>}
+          </div>}
+        </section>
+      )}
+    </div>
+  );
+
+  const renderPostJobView = () => (
+    <div className="retro-page">
+      <div className="retro-page-header">
+        <p className="retro-muted">Business Portal</p>
+        <h1>Post a Job Opening</h1>
+      </div>
+
+      <section className="retro-card">
+        <form onSubmit={handlePostJob} style={{ maxWidth: '600px' }}>
+          <div style={{ marginBottom: '20px' }}>
+            <label className="form-label" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Position Title *</label>
+            <input
+              type="text"
+              required
+              className="retro-search-field"
+              style={{ width: '100%', padding: '10px', border: '2px solid var(--ink)' }}
+              placeholder="e.g., Senior React Developer"
+              value={postJobForm.title}
+              onChange={(e) => setPostJobForm({ ...postJobForm, title: e.target.value })}
+            />
+          </div>
+
+          <div style={{ marginBottom: '20px' }}>
+            <label className="form-label" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Description *</label>
+            <textarea
+              required
+              style={{ width: '100%', padding: '10px', border: '2px solid var(--ink)', fontFamily: 'inherit', minHeight: '120px' }}
+              placeholder="Describe the role and responsibilities..."
+              value={postJobForm.description}
+              onChange={(e) => setPostJobForm({ ...postJobForm, description: e.target.value })}
+            />
+          </div>
+
+          <div style={{ marginBottom: '20px' }}>
+            <label className="form-label" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Location *</label>
+            <input
+              type="text"
+              required
+              className="retro-search-field"
+              style={{ width: '100%', padding: '10px', border: '2px solid var(--ink)' }}
+              placeholder="e.g., New York, NY or Remote"
+              value={postJobForm.location}
+              onChange={(e) => setPostJobForm({ ...postJobForm, location: e.target.value })}
+            />
+          </div>
+
+          <div style={{ marginBottom: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+            <div>
+              <label className="form-label" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Job Type</label>
+              <select
+                className="retro-search-field"
+                style={{ width: '100%', padding: '10px', border: '2px solid var(--ink)' }}
+                value={postJobForm.job_type}
+                onChange={(e) => setPostJobForm({ ...postJobForm, job_type: e.target.value })}
+              >
+                <option value="full-time">Full-time</option>
+                <option value="part-time">Part-time</option>
+                <option value="contract">Contract</option>
+                <option value="internship">Internship</option>
+                <option value="temporary">Temporary</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '20px' }}>
+            <label className="form-label" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Requirements</label>
+            <textarea
+              style={{ width: '100%', padding: '10px', border: '2px solid var(--ink)', fontFamily: 'inherit', minHeight: '100px' }}
+              placeholder="List required skills and qualifications..."
+              value={postJobForm.requirements}
+              onChange={(e) => setPostJobForm({ ...postJobForm, requirements: e.target.value })}
+            />
+          </div>
+
+          {postJobMessage && (
+            <div style={{ padding: '12px', marginBottom: '20px', backgroundColor: postingJob ? 'transparent' : postJobMessage.includes('success') ? 'rgba(140, 154, 110, 0.1)' : 'rgba(200, 0, 0, 0.1)', borderRadius: '8px', color: postJobMessage.includes('success') ? 'var(--sage)' : 'var(--coral)' }}>
+              {postJobMessage}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button type="submit" className="retro-primary-button" disabled={postingJob}>
+              {postingJob ? 'Posting...' : 'Post Job'}
+            </button>
+            <button
+              type="button"
+              className="retro-ghost-button"
+              onClick={() => setActiveView('overview')}
+              disabled={postingJob}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
 
   const renderOverview = () => (
     <div className="retro-page">
@@ -505,6 +721,8 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
     if (activeView === 'jobs') {
       return <JobPortal onCompleteProfile={() => setShowProfile(true)} initialSearchQuery={searchQuery} initialLocation={searchLocation} />;
     }
+    if (activeView === 'post-job') return renderPostJobView();
+    if (activeView === 'recruiter-analytics') return renderRecruiterAnalyticsView();
     if (activeView === 'applications') return <Applications />;
     if (activeView === 'saved') return <SavedJobs />;
     if (activeView === 'coach') {
