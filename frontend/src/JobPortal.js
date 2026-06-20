@@ -56,6 +56,11 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applicationData, setApplicationData] = useState({ coverLetter: '' });
+  const [optimizingResume, setOptimizingResume] = useState(false);
+  const [optimizedResumeText, setOptimizedResumeText] = useState('');
+  const [generatingCoverLetter, setGeneratingCoverLetter] = useState(false);
+  const [generatedCoverLetter, setGeneratedCoverLetter] = useState('');
+  const [showCoverLetterPreview, setShowCoverLetterPreview] = useState(false);
   const [interviewTips, setInterviewTips] = useState('');
   const [interviewTipsLoading, setInterviewTipsLoading] = useState(false);
   const [interviewTipsError, setInterviewTipsError] = useState('');
@@ -162,8 +167,14 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
   };
 
   const handleSearch = async () => {
-    await fetchJobsData(); // Re-fetch with current search parameters
+    await fetchJobsData();
   };
+
+  // When searchQuery or locationFilter changes to empty, re-fetch all jobs
+  useEffect(() => {
+    fetchJobsData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, locationFilter]);
 
   const formatJob = (job) => {
     let requirements;
@@ -366,6 +377,71 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
     }
   };
 
+  const handleOptimizeResumeForJob = async () => {
+    if (!selectedJob || !candidateProfile?.resume_text) {
+      setActionNotice('No resume found. Please upload a resume in your profile first.');
+      return;
+    }
+
+    try {
+      setOptimizingResume(true);
+      setOptimizedResumeText('');
+      const jobId = selectedJob.job_id || selectedJob.id;
+      const result = await getResumeTailoringTips(jobId, selectedJob);
+      const suggestions = result?.suggestions || '';
+      setOptimizedResumeText(suggestions);
+      setActionNotice('Resume optimization suggestions generated. Review them below before applying.');
+    } catch (err) {
+      setActionNotice(err.message || 'Failed to optimize resume');
+    } finally {
+      setOptimizingResume(false);
+    }
+  };
+
+  const handleGenerateCoverLetter = async () => {
+    if (!selectedJob) return;
+
+    try {
+      setGeneratingCoverLetter(true);
+      setGeneratedCoverLetter('');
+      const jobId = selectedJob.job_id || selectedJob.id;
+      const result = await getMatchAnalysis(jobId, selectedJob);
+      const analysis = result || {};
+      const summary = analysis.summary || '';
+      const strengths = Array.isArray(analysis.strengths) ? analysis.strengths.join(', ') : '';
+      const matchScore = Math.round((analysis.match_score || 0) * 100);
+
+      const coverLetter = `Dear Hiring Manager,
+
+I am writing to express my strong interest in the ${selectedJob.title} position at ${selectedJob.company || 'your organization'}. With a match score of ${matchScore}% based on my profile alignment with your requirements, I am confident that I can bring significant value to your team.
+
+${summary ? `My background aligns well with this role: ${summary}` : ''}
+
+${strengths ? `Key strengths I bring to this position include: ${strengths}.` : ''}
+
+I am excited about the opportunity to contribute to your team and would welcome the chance to discuss how my skills and experience can benefit your organization.
+
+Thank you for considering my application. I look forward to hearing from you.
+
+Best regards,
+${candidateProfile?.first_name || ''} ${candidateProfile?.last_name || ''}`;
+
+      setGeneratedCoverLetter(coverLetter);
+      setShowCoverLetterPreview(true);
+      setActionNotice('Cover letter generated! Review it below and copy it to the cover letter field.');
+    } catch (err) {
+      setActionNotice(err.message || 'Failed to generate cover letter');
+    } finally {
+      setGeneratingCoverLetter(false);
+    }
+  };
+
+  const useGeneratedCoverLetter = () => {
+    setApplicationData({ coverLetter: generatedCoverLetter });
+    setShowCoverLetterPreview(false);
+    setActionNotice('Cover letter added to your application.');
+  };
+
   const submitApplication = async (event) => {
     event.preventDefault();
     if (!selectedJob) return;
@@ -381,6 +457,9 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
       setShowApplicationModal(false);
       setSelectedJob(null);
       setApplicationData({ coverLetter: '' });
+      setOptimizedResumeText('');
+      setGeneratedCoverLetter('');
+      setShowCoverLetterPreview(false);
       alert('Application submitted successfully!');
     } catch (err) {
       alert(err.message || 'Failed to submit application');
@@ -745,8 +824,52 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
                   </div>
                 )}
 
+                {candidateProfile?.resume_text && (
+                  <div className="form-group">
+                    <label className="form-label">AI Resume Optimization</label>
+                    <p style={{ fontSize: '13px', color: 'var(--ink-mute)', marginBottom: '8px' }}>
+                      Get ATS-friendly suggestions tailored to this job
+                    </p>
+                    <button
+                      type="button"
+                      className="retro-ghost-button"
+                      onClick={handleOptimizeResumeForJob}
+                      disabled={optimizingResume}
+                    >
+                      {optimizingResume ? 'Analyzing job requirements...' : '✨ Optimize my resume for this job'}
+                    </button>
+                    {optimizedResumeText && (
+                      <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(14,165,233,0.06)', borderRadius: '8px', fontSize: '13px', lineHeight: 1.6 }}>
+                        <strong>ATS Optimization Tips:</strong>
+                        <pre style={{ whiteSpace: 'pre-wrap', margin: '8px 0 0 0', fontFamily: 'inherit' }}>{optimizedResumeText}</pre>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="form-group">
-                  <label className="form-label">Cover Letter (Optional)</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label className="form-label" style={{ margin: 0 }}>Cover Letter (Optional)</label>
+                    <button
+                      type="button"
+                      className="retro-link-button"
+                      onClick={handleGenerateCoverLetter}
+                      disabled={generatingCoverLetter}
+                    >
+                      {generatingCoverLetter ? 'Generating...' : '✨ Generate cover letter'}
+                    </button>
+                  </div>
+                  {showCoverLetterPreview && generatedCoverLetter && (
+                    <div style={{ marginBottom: '12px', padding: '12px', background: 'rgba(140,154,110,0.1)', borderRadius: '8px', fontSize: '13px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <strong>Generated Cover Letter</strong>
+                        <button type="button" className="retro-primary-button" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={useGeneratedCoverLetter}>
+                          Use this cover letter
+                        </button>
+                      </div>
+                      <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit', lineHeight: 1.6 }}>{generatedCoverLetter}</pre>
+                    </div>
+                  )}
                   <textarea
                     rows={6}
                     className="form-textarea"
