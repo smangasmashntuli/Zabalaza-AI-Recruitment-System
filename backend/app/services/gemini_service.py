@@ -19,6 +19,8 @@ import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone
 
+#print("GEMINI KEY:", API_KEY)
+
 # Optional local text-generation support via Hugging Face transformers
 try:
     from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
