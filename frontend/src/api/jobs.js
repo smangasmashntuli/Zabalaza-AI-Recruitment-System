@@ -60,23 +60,9 @@ export const searchJobs = async (searchParams) => {
 };
 
 /**
- * Search unified jobs (internal + external) from hybrid endpoint.
+ * Get applications for a job posting
  */
-export const searchHybridJobs = async (searchParams = {}) => {
-  const params = new URLSearchParams();
-
-  if (searchParams.query) params.append('query', searchParams.query);
-  if (searchParams.location) params.append('location', searchParams.location);
-  if (searchParams.jobType) params.append('job_type', searchParams.jobType);
-  if (searchParams.experienceLevel) params.append('experience_level', searchParams.experienceLevel);
-  if (searchParams.remoteOnly) params.append('remote_only', 'true');
-  if (searchParams.salaryMin) params.append('salary_min', String(searchParams.salaryMin));
-  if (searchParams.salaryMax) params.append('salary_max', String(searchParams.salaryMax));
-  if (searchParams.page) params.append('page', String(searchParams.page));
-  if (searchParams.limit) params.append('limit', String(searchParams.limit));
-  params.append('include_external', 'true');
-
-  const result = await get(`${API_ENDPOINTS.JOBS}/search/hybrid?${params.toString()}`);
-  return result?.items || [];
+export const getJobApplications = async (jobId) => {
+  return get(`${API_ENDPOINTS.JOBS}/${jobId}/applications`);
 };
 

@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import json
+
+from torch.fx.experimental.unification.unification_tools import first
+
 from ..core.dependencies import get_db, get_current_active_user, get_current_recruiter_user
 from ..models import User, Job, JobStatus, Candidate
 from ..schemas import Job as JobSchema, JobCreate, JobUpdate, JobWithApplications
@@ -182,6 +185,47 @@ def get_my_jobs(
 
     return result
 
+@router.get("/job_id/applications")
+def get_job_applications(
+        job_id: int,
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
+):
+    """Get applications for a specific job (recruiter only)."""
+    job = db.query(Job).filter(Job.id == job_id).first()
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found"
+        )
+
+    if job.recruiter_id != current_user.id and current_user.role.value != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view these applications"
+        )
+
+    from models import Application, Candidate
+    applications = db.query(Application).filter(Application.job_id == job_id).all()
+
+    result = []
+    for app in applications:
+        candidate = db.query(Candidate).filter(Candidate.id == app.candidate_id).first()
+        candidate_user = db.query(User).filter(User.id == candidate.user_id).first() if candidate else None
+        result.append({
+            "id": app.id,
+            "candidate_id": app.candidate_id,
+            "candidate_name": f"{candidate_user.first_name or ''} {candidate_user.last_name or ''}".strip() if candidate_user else "Unknown",
+            "candidate_email": candidate_user.email if candidate_user else "",
+            "status": app.status,
+            "match_score": app.match_score or 0,
+            "cover_letter": app.cover_letter,
+            "applied_at": app.applied_at,
+        })
+    result.sort(key=lambda x: x["status"], reverse=True)
+
+    return result
 
 # ============================================================================
 # HYBRID JOB SEARCH ENDPOINTS (Internal + External APIs)
