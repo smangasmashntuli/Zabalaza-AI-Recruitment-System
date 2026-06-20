@@ -299,7 +299,8 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
 
   const businessActions = [
     { label: 'Post a Job', description: 'Create a job opening for your organization.' },
-    { label: 'View Applications', description: 'See all candidates who applied to your jobs.' },
+    { label: 'Create a Company page', description: 'Set up your company profile page.' },
+    { label: 'Job posting account', description: 'Manage your posted jobs, insights, and applicants.' },
   ];
 
   const filteredApplications = applications.filter((app) => {
@@ -325,8 +326,14 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
     setShowBusinessMenu(false);
     if (label === 'Post a Job') {
       setActiveView('post-job');
-    } else if (label === 'View Applications') {
-      setActiveView('recruiter-analytics');
+    } else if (label === 'Create a Company page') {
+      setActiveView('company-page');
+    } else if (label === 'Job posting account') {
+      if (recruiterJobs.length === 0) {
+        setActiveView('overview');
+      } else {
+        setActiveView('recruiter-analytics');
+      }
     }
   };
 
