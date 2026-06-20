@@ -162,13 +162,13 @@ export function Applications() {
 
   const getNextAction = (status) => {
     const actionMap = {
-      'applied': 'Check status',
+      'applied': 'Awaiting update',
       'under_review': 'Awaiting response',
       'interview_scheduled': 'Prepare for interview',
       'offer_received': 'Review offer',
       'rejected': 'Application closed'
     };
-    return actionMap[status] || 'Check status';
+    return actionMap[status] || 'Awaiting update';
   };
 
   const parseSkills = (skillsString) => {
@@ -411,7 +411,11 @@ export function Applications() {
                     </div>
                     <div className="footer-right">
                       <span className="next-action">{app.nextAction}</span>
-                      <button className="action-button-small">
+                      <button className="action-button-small" onClick={() => {
+                        if (app.jobData?.id) {
+                          window.open(`/job/${app.jobData.id}`, '_self');
+                        }
+                      }} title="View job details">
                         <Icon name="arrow" size={16} />
                       </button>
                     </div>
