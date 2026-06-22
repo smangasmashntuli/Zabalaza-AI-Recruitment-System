@@ -535,6 +535,100 @@ Keep suggestions concise and actionable.
             logger.error(f"❌ Error getting resume tailoring suggestions: {e}")
             return "Could not generate suggestions at this time."
 
+    def analyze_cv_for_job(
+        self,
+        job_title: str,
+        job_description: str,
+        job_requirements: str,
+        cv_text: str,
+        candidate_skills: List[str],
+        candidate_experience: List[Dict]
+    ) -> Dict[str, Any]:
+        """
+        Analyze a CV against a specific job and return structured feedback for recruiters.
+
+        Returns dict with: headline, summary, strengths, gaps, seniority_fit, notable_signal
+        """
+        if not self.enabled:
+            return {
+                "headline": "CV analysis unavailable",
+                "summary": "LLM analysis is not available. Please review the match score and candidate profile manually.",
+                "strengths": candidate_skills[:3] if candidate_skills else [],
+                "gaps": [],
+                "seniority_fit": "Unable to assess",
+                "notable_signal": ""
+            }
+
+        try:
+            exp_summary = "; ".join([str(e)[:50] for e in candidate_experience[:2]]) if isinstance(candidate_experience, list) else str(candidate_experience)[:100]
+
+            prompt = f"""You are helping a recruiter understand candidate fit. You are not screening candidates out — every candidate stays in the pool regardless of score. Your job is only to summarize fit accurately and fairly so a human can make the final call, including overriding the numeric score if the summary makes a strong case.
+
+JOB TITLE: {job_title or '(not specified)'}
+JOB DESCRIPTION: {job_description or '(not specified)'}
+REQUIREMENTS: {job_requirements or '(not specified)'}
+
+CANDIDATE CV TEXT (may include a resume and/or cover letter; treat both as part of the same candidate signal):
+{cv_text[:8000]}
+
+Respond with ONLY valid JSON, no markdown fences, no preamble, matching exactly this shape:
+{{
+  "headline": "one line, max 12 words, the single most useful thing to know about this candidate for this role",
+  "summary": "2-3 sentences, plain language, balanced and specific, written for a recruiter skimming quickly",
+  "strengths": ["short phrase", "short phrase", "short phrase"],
+  "gaps": ["short phrase", "short phrase"],
+  "seniority_fit": "one short phrase e.g. 'matches junior level' or 'overqualified' or 'underqualified for stated requirements'",
+  "notable_signal": "one short phrase on anything distinctive worth a second look, e.g. strong portfolio, unusual career path, or empty string if none"
+}}"""
+            response = self.client.generate_content(prompt)
+            if not response or not hasattr(response, 'text') or not response.text:
+                return {
+                    "headline": "CV analysis unavailable",
+                    "summary": "Could not generate analysis at this time.",
+                    "strengths": candidate_skills[:3] if candidate_skills else [],
+                    "gaps": [],
+                    "seniority_fit": "Unable to assess",
+                    "notable_signal": ""
+                }
+
+            text = response.text.strip()
+            # Strip markdown fences if present
+            if text.startswith('```'):
+                text = text.split('\n', 1)[-1]
+            if text.endswith('```'):
+                text = text[:-3]
+            text = text.strip()
+
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                # Try to extract JSON substring
+                start = text.find('{')
+                end = text.rfind('}')
+                if start != -1 and end != -1 and end > start:
+                    try:
+                        return json.loads(text[start:end + 1])
+                    except json.JSONDecodeError:
+                        pass
+                return {
+                    "headline": "CV analysis unavailable",
+                    "summary": text[:300] or "Could not parse analysis.",
+                    "strengths": candidate_skills[:3] if candidate_skills else [],
+                    "gaps": [],
+                    "seniority_fit": "Unable to assess",
+                    "notable_signal": ""
+                }
+        except Exception as e:
+            logger.error(f"❌ Error analyzing CV for job: {e}")
+            return {
+                "headline": "CV analysis unavailable",
+                "summary": "An error occurred during analysis.",
+                "strengths": candidate_skills[:3] if candidate_skills else [],
+                "gaps": [],
+                "seniority_fit": "Unable to assess",
+                "notable_signal": ""
+            }
+
     def get_profile_improvement_tips(
         self,
         current_skills: List[str],
