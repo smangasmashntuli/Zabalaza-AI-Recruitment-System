@@ -11,6 +11,7 @@ import {
   getProfileImprovementTips,
 } from './api/candidates';
 import { getJobs, createJob, getJobApplications } from './api/jobs';
+import { rankCVsForJob, getRankedCandidates, updateApplicationStatus, sendCandidateEmail } from './api/recruiter';
 import { getDiscoverIntelligence } from './api/intelligence';
 import { getCurrentUser } from './api/auth';
 import { calculateAnalytics, calculateProfileCompletion, generateInsights } from './api/analytics';
@@ -105,6 +106,21 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
   const [recruiterJobs, setRecruiterJobs] = useState([]);
   const [selectedJobApplications, setSelectedJobApplications] = useState(null);
   const [applicationsLoading, setApplicationsLoading] = useState(false);
+  const [rankedCandidates, setRankedCandidates] = useState([]);
+  const [rankingLoading, setRankingLoading] = useState(false);
+  const [cvFiles, setCvFiles] = useState([]);
+  const [showRankingUI, setShowRankingUI] = useState(false);
+  const [recruiterAccountForm, setRecruiterAccountForm] = useState({
+    accountType: 'company',
+    hiringLocation: 'south-africa',
+    jobType: 'remote',
+    companyName: '',
+    companyEmail: '',
+    companyPassword: '',
+    confirmPassword: '',
+  });
+  const [creatingRecruiterAccount, setCreatingRecruiterAccount] = useState(false);
+  const [recruiterAccountMessage, setRecruiterAccountMessage] = useState('');
 
   const fetchDashboardData = async ({ silent = false } = {}) => {
     try {
@@ -126,10 +142,16 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
       setApplications(formattedApps);
       setAnalytics(calculateAnalytics(apps));
       setInsights(generateInsights(apps, profile));
+
+      const userFullName = profile.first_name && profile.last_name
+        ? `${profile.first_name} ${profile.last_name}`
+        : currentUser.full_name || currentUser.username;
+
       setUserProfile({
-        name: currentUser.full_name || currentUser.username,
+        name: userFullName,
+        first_name: profile.first_name || currentUser.full_name?.split(' ')[0] || currentUser.username,
         title: profile.title || profile.profile_summary || currentUser.email || currentUser.username,
-        avatar: getUserInitials(currentUser.full_name || currentUser.username),
+        avatar: getUserInitials(userFullName),
         profileComplete: calculateProfileCompletion(profile),
       });
 
@@ -298,9 +320,8 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
   ].filter(Boolean).slice(0, 4);
 
   const businessActions = [
-    { label: 'Post a Job', description: 'Create a job opening for your organization.' },
     { label: 'Create a Company page', description: 'Set up your company profile page.' },
-    { label: 'Job posting account', description: 'Manage your posted jobs, insights, and applicants.' },
+    { label: 'Job posting account', description: 'Create or manage your recruiter account to post jobs, review applicants, and view insights.' },
   ];
 
   const filteredApplications = applications.filter((app) => {
@@ -363,6 +384,82 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
     }
   };
 
+  const handleRankCVs = async (jobId) => {
+    if (cvFiles.length === 0) {
+      alert('Please select CV files to upload');
+      return;
+    }
+    try {
+      setRankingLoading(true);
+      const result = await rankCVsForJob(jobId, cvFiles);
+      setRankedCandidates(result.candidates || []);
+      setShowRankingUI(true);
+      setCvFiles([]);
+      alert(`Successfully processed ${result.total_processed} CVs${result.total_errors > 0 ? ` (${result.total_errors} errors)` : ''}`);
+    } catch (err) {
+      alert(err.message || 'Failed to rank CVs');
+    } finally {
+      setRankingLoading(false);
+    }
+  };
+
+  const handleViewRankedCandidates = async (jobId) => {
+    try {
+      setRankingLoading(true);
+      const candidates = await getRankedCandidates(jobId);
+      setRankedCandidates(candidates);
+      setShowRankingUI(true);
+    } catch (err) {
+      alert(err.message || 'Failed to load ranked candidates');
+    } finally {
+      setRankingLoading(false);
+    }
+  };
+
+  const handleCandidateAction = async (applicationId, action) => {
+    const statusMap = {
+      'offer': 'accepted',
+      'reject': 'rejected',
+      'interview': 'interview',
+    };
+    const newStatus = statusMap[action];
+    if (!newStatus) return;
+
+    try {
+      await updateApplicationStatus(applicationId, {
+        status: newStatus,
+        message: action === 'offer' ? 'Congratulations! You have been offered this position.' :
+                 action === 'reject' ? 'Thank you for your application. We have decided to move forward with other candidates.' :
+                 'You have been selected for an interview.'
+      });
+      alert(`Candidate ${action}ed successfully`);
+      if (selectedJobApplications?.id) {
+        handleViewRankedCandidates(selectedJobApplications.id);
+      }
+    } catch (err) {
+      alert(err.message || `Failed to ${action} candidate`);
+    }
+  };
+
+  const handleSendEmail = async (applicationId) => {
+    const subject = prompt('Email subject:');
+    if (!subject) return;
+    const body = prompt('Email message:');
+    if (!body) return;
+
+    try {
+      await sendCandidateEmail(applicationId, { subject, body, type: 'general' });
+      alert('Email sent successfully');
+    } catch (err) {
+      alert(err.message || 'Failed to send email');
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files || []);
+    setCvFiles(files);
+  };
+
   const renderRecruiterAnalyticsView = () => (
     <div className="retro-page">
       <div className="retro-page-header">
@@ -370,45 +467,157 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
         <h1>Job Applications & Analytics</h1>
       </div>
 
-      <section className="retro-card">
-        <h2 style={{ marginBottom: '16px' }}>Your Posted Jobs</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-          {recruiterJobs.map((job) => (
-            <div key={job.id} style={{ border: '2px solid var(--ink)', borderRadius: '12px', padding: '16px', cursor: 'pointer' }} onClick={() => setSelectedJobApplications(job)}>
-              <h3 style={{ margin: '0 0 8px 0' }}>{job.title}</h3>
-              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'var(--ink-mute)' }}>{job.location}</p>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <strong style={{ fontSize: '14px' }}>{job.application_count || 0} applications</strong>
-                <span style={{ fontSize: '12px', color: 'var(--ink-mute)' }}>Click to view</span>
-              </div>
-            </div>
-          ))}
-          {recruiterJobs.length === 0 && <p style={{ gridColumn: '1 / -1' }}>No jobs posted yet. <button className="retro-link-button" onClick={() => setActiveView('post-job')}>Post a job</button></p>}
-        </div>
-      </section>
-
-      {selectedJobApplications && (
-        <section className="retro-card" style={{ marginTop: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h2>{selectedJobApplications.title} - Applicants</h2>
-            <button className="retro-ghost-button" onClick={() => setSelectedJobApplications(null)}>Close</button>
-          </div>
-          {applicationsLoading ? <p>Loading applications...</p> : <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {selectedJobApplications.applications?.map((app) => (
-              <div key={app.id} style={{ border: '1px solid var(--line)', borderRadius: '8px', padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <strong>{app.candidate_name}</strong>
-                  <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--ink-mute)' }}>{app.candidate_email}</p>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ background: 'var(--yellow)', padding: '6px 12px', borderRadius: '6px', fontWeight: 'bold', marginBottom: '4px' }}>Match: {Math.round(app.match_score * 100)}%</div>
-                  <small style={{ color: 'var(--ink-mute)' }}>{new Date(app.applied_at).toLocaleDateString()}</small>
+      {!selectedJobApplications ? (
+        <section className="retro-card">
+          <h2 style={{ marginBottom: '16px' }}>Your Posted Jobs</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+            {recruiterJobs.map((job) => (
+              <div key={job.id} style={{ border: '2px solid var(--ink)', borderRadius: '12px', padding: '16px', cursor: 'pointer' }} onClick={() => setSelectedJobApplications(job)}>
+                <h3 style={{ margin: '0 0 8px 0' }}>{job.title}</h3>
+                <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'var(--ink-mute)' }}>{job.location}</p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong style={{ fontSize: '14px' }}>{job.application_count || 0} applications</strong>
+                  <span style={{ fontSize: '12px', color: 'var(--ink-mute)' }}>Click to manage</span>
                 </div>
               </div>
             ))}
-            {selectedJobApplications.applications?.length === 0 && <p>No applications yet.</p>}
-          </div>}
+            {recruiterJobs.length === 0 && <p style={{ gridColumn: '1 / -1' }}>No jobs posted yet. <button className="retro-link-button" onClick={() => setActiveView('post-job')}>Post a job</button></p>}
+          </div>
         </section>
+      ) : (
+        <div>
+          <section className="retro-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <button className="retro-ghost-button" onClick={() => { setSelectedJobApplications(null); setShowRankingUI(false); setRankedCandidates([]); }} style={{ marginRight: '12px' }}>← Back</button>
+                <span style={{ fontSize: '20px', fontWeight: 'bold' }}>{selectedJobApplications.title}</span>
+                <span style={{ marginLeft: '12px', color: 'var(--ink-mute)' }}>{selectedJobApplications.application_count || 0} applicants</span>
+              </div>
+              <div>
+                <button className="retro-primary-button" onClick={() => handleViewRankedCandidates(selectedJobApplications.id)} style={{ marginRight: '8px' }}>
+                  View Ranked Candidates
+                </button>
+                <label className="retro-primary-button" style={{ display: 'inline-block', cursor: 'pointer', background: 'var(--sage)' }}>
+                  Upload & Rank CVs
+                  <input type="file" multiple accept=".pdf,.docx,.txt" onChange={handleFileChange} style={{ display: 'none' }} />
+                </label>
+                {cvFiles.length > 0 && (
+                  <button className="retro-primary-button" onClick={() => handleRankCVs(selectedJobApplications.id)} disabled={rankingLoading} style={{ marginLeft: '8px' }}>
+                    {rankingLoading ? 'Ranking...' : `Rank ${cvFiles.length} CVs`}
+                  </button>
+                )}
+              </div>
+            </div>
+            {cvFiles.length > 0 && (
+              <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--surface-2)', borderRadius: '8px' }}>
+                <strong>Selected files:</strong> {cvFiles.map(f => f.name).join(', ')}
+              </div>
+            )}
+          </section>
+
+          {showRankingUI && rankedCandidates.length > 0 && (
+            <section className="retro-card" style={{ marginTop: '24px' }}>
+              <h2 style={{ marginBottom: '16px' }}>Ranked Candidates (by match score)</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {rankedCandidates.map((candidate, index) => (
+                  <div key={candidate.application_id || candidate.id} style={{ border: '1px solid var(--line)', borderRadius: '12px', padding: '20px', background: 'var(--surface)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 120px', gap: '16px', alignItems: 'start' }}>
+                      <div style={{ fontSize: '32px', fontWeight: 'bold', color: index === 0 ? 'var(--amber)' : index === 1 ? 'var(--text-muted)' : index === 2 ? 'var(--coral)' : 'var(--text-faint)' }}>
+                        #{index + 1}
+                      </div>
+                      <div>
+                        <h3 style={{ margin: '0 0 8px 0', fontSize: '18px' }}>{candidate.candidate_name}</h3>
+                        <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: 'var(--ink-mute)' }}>{candidate.candidate_email}</p>
+                        {candidate.headline && <p style={{ margin: '0 0 12px 0', fontSize: '14px', fontStyle: 'italic', color: 'var(--text)' }}>"{candidate.headline}"</p>}
+                        {candidate.summary && <p style={{ margin: '0 0 12px 0', fontSize: '14px', lineHeight: '1.6' }}>{candidate.summary}</p>}
+                        {candidate.strengths && candidate.strengths.length > 0 && (
+                          <div style={{ marginBottom: '8px' }}>
+                            <strong style={{ color: 'var(--green)', fontSize: '13px' }}>Strengths:</strong>
+                            <ul style={{ margin: '4px 0 0 0', paddingLeft: '20px', fontSize: '13px' }}>
+                              {candidate.strengths.map((s, i) => <li key={i}>{s}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                        {candidate.gaps && candidate.gaps.length > 0 && (
+                          <div style={{ marginBottom: '8px' }}>
+                            <strong style={{ color: 'var(--coral)', fontSize: '13px' }}>Gaps:</strong>
+                            <ul style={{ margin: '4px 0 0 0', paddingLeft: '20px', fontSize: '13px' }}>
+                              {candidate.gaps.map((g, i) => <li key={i}>{g}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                        {candidate.seniority_fit && <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: 'var(--text-muted)' }}><strong>Seniority:</strong> {candidate.seniority_fit}</p>}
+                        {candidate.notable_signal && <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--amber)' }}><strong>Notable:</strong> {candidate.notable_signal}</p>}
+                        <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ background: 'var(--surface-2)', padding: '4px 10px', borderRadius: '4px', fontSize: '12px', fontFamily: 'var(--mono)' }}>
+                            Status: {candidate.status || 'pending'}
+                          </span>
+                          <span style={{ background: 'var(--surface-2)', padding: '4px 10px', borderRadius: '4px', fontSize: '12px', fontFamily: 'var(--mono)' }}>
+                            Applied: {new Date(candidate.applied_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '36px', fontWeight: 'bold', color: candidate.match_score >= 70 ? 'var(--green)' : candidate.match_score >= 45 ? 'var(--amber)' : 'var(--coral)' }}>
+                          {candidate.match_score}%
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' }}>Match Score</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <button className="retro-primary-button" onClick={() => handleCandidateAction(candidate.application_id, 'offer')} style={{ background: 'var(--green)', fontSize: '12px', padding: '8px' }}>
+                            Offer
+                          </button>
+                          <button className="retro-primary-button" onClick={() => handleCandidateAction(candidate.application_id, 'interview')} style={{ background: 'var(--amber)', fontSize: '12px', padding: '8px' }}>
+                            Interview
+                          </button>
+                          <button className="retro-primary-button" onClick={() => handleCandidateAction(candidate.application_id, 'reject')} style={{ background: 'var(--coral)', fontSize: '12px', padding: '8px' }}>
+                            Reject
+                          </button>
+                          <button className="retro-ghost-button" onClick={() => handleSendEmail(candidate.application_id)} style={{ fontSize: '12px', padding: '8px' }}>
+                            Send Email
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {showRankingUI && rankedCandidates.length === 0 && (
+            <section className="retro-card" style={{ marginTop: '24px' }}>
+              <div className="retro-empty">
+                <Icon name="doc" />
+                <h3>No ranked candidates yet</h3>
+                <p>Upload CVs using the button above to rank them against this job.</p>
+              </div>
+            </section>
+          )}
+
+          {!showRankingUI && (
+            <section className="retro-card" style={{ marginTop: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2>All Applicants</h2>
+                <button className="retro-ghost-button" onClick={() => setSelectedJobApplications(null)}>Close</button>
+              </div>
+              {applicationsLoading ? <p>Loading applications...</p> : <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {selectedJobApplications.applications?.map((app) => (
+                  <div key={app.id} style={{ border: '1px solid var(--line)', borderRadius: '8px', padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <strong>{app.candidate_name}</strong>
+                      <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--ink-mute)' }}>{app.candidate_email}</p>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ background: 'var(--yellow)', padding: '6px 12px', borderRadius: '6px', fontWeight: 'bold', marginBottom: '4px' }}>Match: {Math.round(app.match_score * 100)}%</div>
+                      <small style={{ color: 'var(--ink-mute)' }}>{new Date(app.applied_at).toLocaleDateString()}</small>
+                    </div>
+                  </div>
+                ))}
+                {selectedJobApplications.applications?.length === 0 && <p>No applications yet.</p>}
+              </div>}
+            </section>
+          )}
+        </div>
       )}
     </div>
   );
