@@ -1171,6 +1171,47 @@ select:focus {
   background: var(--cream-card);
 }
 
+.insights-page .insight-stat {
+  position: relative;
+  transition: transform 0.2s ease;
+}
+
+.insights-page .insight-stat:hover {
+  transform: translateY(-4px);
+}
+
+.insights-charts {
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 0;
+}
+
+.insights-charts .retro-section-card {
+  min-height: 320px;
+}
+
+/* Chart container responsiveness */
+.insights-page .recharts-wrapper {
+  font-family: inherit;
+}
+
+.insights-page .recharts-tooltip-wrapper {
+  font-family: inherit;
+}
+
+/* Weekly performance chart */
+.insights-page .recharts-bar-rectangle:hover {
+  opacity: 0.8;
+}
+
+/* Make stats cards more interactive */
+.insight-stat .retro-icon-box {
+  transition: transform 0.2s ease;
+}
+
+.insight-stat:hover .retro-icon-box {
+  transform: scale(1.1);
+}
+
 @media (max-width: 1100px) {
   .retro-workspace {
     margin: 0 18px 18px;
@@ -1184,6 +1225,9 @@ select:focus {
   }
 
   .retro-content-grid {
+    grid-template-columns: 1fr;
+  }
+  .insights-charts{
     grid-template-columns: 1fr;
   }
 }
@@ -1255,5 +1299,9 @@ select:focus {
     left: 0;
     right: auto;
     width: min(320px, 90vw);
+  }
+
+  .insights-page .retro-stats-grid{
+    grid-template-columns: 1fr 1fr;
   }
 }
