@@ -19,9 +19,16 @@ import { formatApplication, formatRecommendation, getUserInitials } from './util
 import JobPortal from './JobPortal';
 import { Applications } from './Applications';
 import SavedJobs from './SavedJobs';
+import CompanyRegistration from './CompanyRegistration';
+import RecruiterDashboard from './RecruiterDashboard';
 import NotificationsPanel from './Notifications';
 import Settings from './Settings';
 import ChatBot from './ChatBot';
+
+import {
+  LineChart, Line, BarChart, XAxis, YAxis, CartesianGrid, Tooltip,
+  Legend, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, Bar,
+} from "recharts";
 
 const Icon = ({ name, size = 18, color = 'currentColor', strokeWidth = 1.8 }) => {
   const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: color, strokeWidth, strokeLinecap: 'round', strokeLinejoin: 'round' };
@@ -48,6 +55,7 @@ const Icon = ({ name, size = 18, color = 'currentColor', strokeWidth = 1.8 }) =>
     money: <><circle cx="12" cy="12" r="8.5" /><path d="M9.5 9.3c0-1 1-1.8 2.5-1.8s2.5.8 2.5 1.8c0 2.4-5 1.6-5 4 0 1 1 1.8 2.5 1.8s2.5-.8 2.5-1.8" /></>,
     calendar: <><rect x="3.5" y="5" width="17" height="15.5" rx="1.5" /><path d="M3.5 9.5h17" /><path d="M8 3v3.5M16 3v3.5" /></>,
     arrowRight: <path d="M5 12h14M13 6l6 6-6 6" />,
+    graph: <><path d="M3 3v18h18" /><path d="M7 16l4-8 4 5 4-9" /></>,
     settings: <><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7.2 7.2 0 0 0-2-1.2L14.2 3h-4.4l-.4 2.6a7.2 7.2 0 0 0-2 1.2l-2.4-1-2 3.5 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.4-1a7.2 7.2 0 0 0 2 1.2l.4 2.6h4.4l.4-2.6a7.2 7.2 0 0 0 2-1.2l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z" /></>,
   };
   return <svg {...common}>{paths[name] || paths.star}</svg>;
@@ -60,6 +68,7 @@ const navItems = [
   { id: 'saved', label: 'Saved jobs', icon: 'bookmark' },
   { id: 'coach', label: 'Career coach', icon: 'chat' },
   { id: 'discover', label: 'Discover', icon: 'spark' },
+  { id: 'insights', label: 'Insights', icon: 'graph'},
   { id: 'settings', label: 'Settings', icon: 'settings' },
 ];
 
@@ -121,6 +130,370 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
   });
   const [creatingRecruiterAccount, setCreatingRecruiterAccount] = useState(false);
   const [recruiterAccountMessage, setRecruiterAccountMessage] = useState('');
+  const [insightsChartData, setInsightChartData] = useState([]);
+  const [applicationTrendData, setApplicationTrendData] = useState([]);
+  const [statusDistribution, setStatusDistribution] = useState([]);
+
+  useEffect(() => {
+    if (!applications || !Array.isArray(applications) || applications.length === 0) return;
+    
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+    const currentMonth = new Date().getMonth();
+    const trendData = [];
+
+    for (let i = 5; i >= 0; i--){
+      const monthIndex = (currentMonth - i + 12) % 12;
+      const monthApps = applications.filter(app => {
+        const appDate = new Date(app.applied_date);
+        return appDate.getMonth() === monthIndex;
+      });
+      trendData.push({
+        month: months[monthIndex],
+        applications: monthApps.length,
+      });
+    }
+    setApplicationTrendData(trendData);
+
+    const statuses = {};
+    applications.forEach(app => {
+      const status = app.status || 'applied';
+      statuses[status] = (statuses[status] || 0) + 1;
+    });
+
+    const distribution = Object.entries(statuses).map(([name, value]) => ({
+      name: name.replace('_', ' ').toUpperCase(),
+      value,
+    }));
+    setStatusDistribution(distribution);
+
+    const mockHistory = [];
+    for (let i = 6; i >= 0; i--){
+      const date = new Date();
+      date.setDate(date.getDate() - i * 7);
+      mockHistory.push({
+        week: `Week ${7 - i}`,
+        applications: Math.floor(Math.random() * 5) + 1,
+        interviews: Math.floor(Math.random() * 3),
+        offers: Math.floor(Math.random() * 2),
+      });
+    }
+    setInsightChartData(mockHistory);
+  }, [applications]);
+
+  const renderInsightsView = () => {
+    const COLORS = ['#e8744f', '#f2bd3d', '#8c9a6e', '#9fb8c4'];
+
+    return (
+        <div className="retro-page insights-page">
+        <div className="retro-page-header">
+          <div>
+            <p className="retro-muted">Analytics & Trends</p>
+            <h1>Your Career Insights</h1>
+          </div>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button className="retro-ghost-button" onClick={() => {
+              // Refresh data
+              fetchDashboardData({ silent: true });
+            }}>
+              <Icon name="spark" /> Refresh
+            </button>
+          </div>
+        </div>
+
+        <section className="retro-stats-grid">
+          {[
+            {
+              label: 'Total Applications',
+              value: displayAnalytics.applications.value,
+              delta: 'vs last month',
+              icon: 'doc',
+              tone: 'coral',
+              trend: displayAnalytics.applications.positive,
+              change: displayAnalytics.applications.change
+            },
+            {
+              label: 'Interviews',
+              value: displayAnalytics.interviews.value,
+              delta: 'scheduled',
+              icon: 'calendar',
+              tone: 'yellow',
+              trend: displayAnalytics.interviews.positive,
+              change: displayAnalytics.interviews.change
+            },
+            {
+              label: 'Response Rate',
+              value: `${displayAnalytics.responseRate.value}%`,
+              delta: 'vs average',
+              icon: 'trend',
+              tone: 'sage',
+              trend: displayAnalytics.responseRate.positive,
+              change: displayAnalytics.responseRate.change
+            },
+            {
+              label: 'Active Offers',
+              value: displayAnalytics.offers.value,
+              delta: 'pending',
+              icon: 'star',
+              tone: 'sky',
+              trend: displayAnalytics.offers.positive,
+              change: displayAnalytics.offers.change
+            },
+          ].map((stat) => (
+            <article className="retro-card retro-stat-card insight-stat" key={stat.label}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+                <span className={`retro-icon-box ${stat.tone}`}><Icon name={stat.icon} /></span>
+                {stat.trend !== undefined && (
+                  <span style={{
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    color: stat.trend ? 'var(--sage)' : 'var(--coral)',
+                    background: stat.trend ? 'rgba(140, 154, 110, 0.1)' : 'rgba(232, 116, 79, 0.1)',
+                    padding: '4px 8px',
+                    borderRadius: '6px',
+                  }}>
+                    {stat.trend ? '↑' : '↓'} {Math.abs(stat.change || 0)}%
+                  </span>
+                )}
+              </div>
+              <strong style={{ fontSize: '32px', marginTop: '8px' }}>{stat.value}</strong>
+              <p>{stat.label}</p>
+              <small>{stat.delta}</small>
+            </article>
+          ))}
+        </section>
+
+        {/* Charts Section */}
+        <div className="retro-content-grid insights-charts">
+          {/* Application Trend */}
+          <section className="retro-card retro-section-card">
+            <div className="retro-section-header">
+              <h2>Application Trend</h2>
+              <span>Last 6 months</span>
+            </div>
+            <div style={{ height: '280px', width: '100%' }}>
+              <ResponsiveContainer>
+                <AreaChart data={applicationTrendData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#8a8374" strokeOpacity={0.3} />
+                  <XAxis dataKey="month" stroke="#4a453c" />
+                  <YAxis stroke="#4a453c" />
+                  <Tooltip
+                    contentStyle={{
+                      background: '#f8f3e7',
+                      border: '2px solid #1c1a16',
+                      borderRadius: '8px',
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="applications"
+                    stroke="#e8744f"
+                    fill="#e8744f"
+                    fillOpacity={0.2}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+
+          {/* Status Distribution */}
+          <section className="retro-card retro-section-card">
+            <div className="retro-section-header">
+              <h2>Application Status</h2>
+              <span>Distribution</span>
+            </div>
+            <div style={{ height: '280px', width: '100%' }}>
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie
+                    data={statusDistribution.length > 0 ? statusDistribution : [{ name: 'No Data', value: 1 }]}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {statusDistribution.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      background: '#f8f3e7',
+                      border: '2px solid #1c1a16',
+                      borderRadius: '8px',
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+        </div>
+
+        {/* Weekly Performance */}
+        <section className="retro-card retro-section-card" style={{ marginTop: '20px' }}>
+          <div className="retro-section-header">
+            <h2>Weekly Performance</h2>
+            <span>7-day overview</span>
+          </div>
+          <div style={{ height: '250px', width: '100%' }}>
+            <ResponsiveContainer>
+              <BarChart data={insightsChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#8a8374" strokeOpacity={0.3} />
+                <XAxis dataKey="week" stroke="#4a453c" />
+                <YAxis stroke="#4a453c" />
+                <Tooltip
+                  contentStyle={{
+                    background: '#f8f3e7',
+                    border: '2px solid #1c1a16',
+                    borderRadius: '8px',
+                  }}
+                />
+                <Legend />
+                <Bar dataKey="applications" fill="#e8744f" />
+                <Bar dataKey="interviews" fill="#f2bd3d" />
+                <Bar dataKey="offers" fill="#8c9a6e" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+
+        {/* Key Insights */}
+        {insights.length > 0 && (
+          <section className="retro-card retro-section-card" style={{ marginTop: '20px' }}>
+            <div className="retro-section-header">
+              <h2>Key Insights</h2>
+              <span>AI-powered analysis</span>
+            </div>
+            <div className="retro-tip-grid">
+              {insights.slice(0, 4).map((insight, index) => (
+                <div className="retro-tip" key={`${insight.title}-${index}`}>
+                  <Icon name="spark" size={15} />
+                  <span><strong>{insight.title}</strong> {insight.message}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    );
+  };
+
+
+  // Update the renderOverview function to remove the stats cards
+  const renderOverview = () => (
+    <div className="retro-page">
+      <div className="retro-page-header">
+        <div>
+          <p className="retro-muted">Welcome back</p>
+          <h1>
+            Hey {displayUserProfile.first_name?.split(' ')[0] ||
+            displayUserProfile.firstName?.split(' ')[0] ||
+            'there'},
+            let's find your next role.
+          </h1>
+        </div>
+        <button className="retro-ghost-button" onClick={() => setActiveView('jobs')}><Icon name="search" />Browse jobs</button>
+      </div>
+
+      <section className="retro-hero-search">
+        <div className="retro-search-field">
+          <Icon name="search" />
+          <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search by job title" />
+        </div>
+        <div className="retro-search-field">
+          <Icon name="location" />
+          <input value={searchLocation} onChange={(event) => setSearchLocation(event.target.value)} placeholder="Location" />
+        </div>
+        <button className="retro-primary-button" onClick={handleFindJobs}>Find Jobs</button>
+      </section>
+
+      {/* Stats Cards Removed - They're now in Insights */}
+
+      <div className="retro-content-grid">
+        <section className="retro-card retro-section-card">
+          <div className="retro-section-header">
+            <h2>Recommended for you</h2>
+            <button className="retro-link-button" onClick={() => setActiveView('jobs')}>See all <Icon name="arrowRight" size={14} /></button>
+          </div>
+          <div className="retro-list">
+            {topRecommendations.length === 0 ? (
+              <div className="retro-empty"><Icon name="spark" />Complete your profile to generate AI-ranked job matches.</div>
+            ) : topRecommendations.map((job, index) => (
+              <div className="retro-list-item" key={job.id || job.position}>
+                <CompanyBadge text={job.companyLogo || job.logo} tone={toneClass[index % toneClass.length]} size={42} />
+                <div>
+                  <strong>{job.position}</strong>
+                  <span>{job.company} - {job.location}</span>
+                </div>
+                <Pill tone="sage" filled>{job.match}% match</Pill>
+                <button className="retro-mini-action" onClick={() => handleQuickApply(job.id)}>Apply</button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="retro-card retro-section-card">
+          <h2>Profile strength</h2>
+          <div className="retro-progress"><span style={{ width: `${displayUserProfile.profileComplete}%` }} /></div>
+          <p className="retro-muted">{displayUserProfile.profileComplete}% complete</p>
+          <div className="retro-checklist">
+            {profileChecklist.map((item) => (
+              <div key={item.label} className={item.completed ? 'complete' : ''}>
+                <Icon name={item.completed ? 'check' : 'clock'} size={14} />
+                {item.label}
+              </div>
+            ))}
+          </div>
+          <button className="retro-primary-button full" onClick={() => setShowProfile(true)}>Complete Profile</button>
+        </section>
+      </div>
+
+      <section className="retro-card retro-section-card">
+        <div className="retro-section-header">
+          <h2>Recent applications</h2>
+          <select className="retro-select" value={selectedFilter} onChange={(event) => setSelectedFilter(event.target.value)}>
+            <option value="all">All Status</option>
+            <option value="applied">Applied</option>
+            <option value="interview">Interview</option>
+            <option value="offer">Offer</option>
+          </select>
+        </div>
+        <div className="retro-application-grid">
+          {filteredApplications.slice(0, 4).map((app, index) => (
+            <article className="retro-application-card" key={app.id}>
+              <CompanyBadge text={app.companyLogo} tone={toneClass[index % toneClass.length]} size={40} />
+              <div>
+                <strong>{app.position}</strong>
+                <span>{app.company}</span>
+              </div>
+              <Pill tone={app.status === 'interview_scheduled' ? 'sage' : 'yellow'} filled>{app.status?.replace('_', ' ') || 'Applied'}</Pill>
+            </article>
+          ))}
+          {filteredApplications.length === 0 && <div className="retro-empty"><Icon name="briefcase" />No applications yet.</div>}
+        </div>
+      </section>
+
+      {insights.length > 0 && (
+        <section className="retro-card retro-section-cards">
+          <div className="retro-section-header">
+            <h2>AI insights</h2>
+            <span>{insights.length} signals</span>
+          </div>
+          <div className="retro-tip-grid">
+            {insights.slice(0, 3).map((insight, index) => (
+              <div className="retro-tip" key={`${insight.title}-${index}`}>
+                <Icon name="spark" size={15} />
+                <span><strong>{insight.title}</strong> {insight.message}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+    )
+
 
   const fetchDashboardData = async ({ silent = false } = {}) => {
     try {
@@ -348,12 +721,21 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
     if (label === 'Post a Job') {
       setActiveView('post-job');
     } else if (label === 'Create a Company page') {
+      // Show company registration/login form
       setActiveView('company-page');
     } else if (label === 'Job posting account') {
-      if (recruiterJobs.length === 0) {
-        setActiveView('overview');
-      } else {
+      // Check if user has recruiter jobs, if not redirect to company registration
+      const currentUser = getCurrentUser();
+      const userData = localStorage.getItem('user_data');
+      const userRole = currentUser?.role || (userData ? JSON.parse(userData).role : null);
+      
+      if (userRole === 'recruiter') {
+        // Already a recruiter, go to the recruiter analytics dashboard
         setActiveView('recruiter-analytics');
+        fetchRecruiterJobs();
+      } else {
+        // Not registered as recruiter yet, show registration form
+        setActiveView('company-page');
       }
     }
   };
@@ -720,138 +1102,6 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
     </div>
   );
 
-  const renderOverview = () => (
-    <div className="retro-page">
-      <div className="retro-page-header">
-        {/*<div>
-          <p className="retro-muted">Welcome back</p>
-          <h1>Hey {displayUserProfile.name?.split(' ')[0] || 'there'}, let's find your next role.</h1>
-        </div>*/}
-
-        <div>
-          <p className="retro-muted">Welcome back</p>
-          <h1>
-            Hey {displayUserProfile.first_name?.split(' ')[0] ||
-            displayUserProfile.firstName?.split(' ')[0] ||
-            'there'},
-            let's find your next role.
-          </h1>
-        </div>
-
-        <button className="retro-ghost-button" onClick={() => setActiveView('jobs')}><Icon name="search" />Browse jobs</button>
-      </div>
-
-      <section className="retro-hero-search">
-        <div className="retro-search-field">
-          <Icon name="search" />
-          <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search by job title" />
-        </div>
-        <div className="retro-search-field">
-          <Icon name="location" />
-          <input value={searchLocation} onChange={(event) => setSearchLocation(event.target.value)} placeholder="Location" />
-        </div>
-        <button className="retro-primary-button" onClick={handleFindJobs}>Find Jobs</button>
-      </section>
-
-      <section className="retro-stats-grid">
-        {[
-          { label: 'Applications sent', value: displayAnalytics.applications.value, delta: displayAnalytics.applications.period, icon: 'doc', tone: 'coral' },
-          { label: 'Interviews', value: displayAnalytics.interviews.value, delta: displayAnalytics.interviews.period, icon: 'calendar', tone: 'yellow' },
-          { label: 'Response rate', value: `${displayAnalytics.responseRate.value}%`, delta: displayAnalytics.responseRate.period, icon: 'trend', tone: 'sage' },
-          { label: 'Active offers', value: displayAnalytics.offers.value, delta: displayAnalytics.offers.period, icon: 'star', tone: 'sky' },
-        ].map((stat) => (
-          <article className="retro-card retro-stat-card" key={stat.label}>
-            <span className={`retro-icon-box ${stat.tone}`}><Icon name={stat.icon} /></span>
-            <strong>{stat.value}</strong>
-            <p>{stat.label}</p>
-            <small>{stat.delta}</small>
-          </article>
-        ))}
-      </section>
-
-      <div className="retro-content-grid">
-        <section className="retro-card retro-section-card">
-          <div className="retro-section-header">
-            <h2>Recommended for you</h2>
-            <button className="retro-link-button" onClick={() => setActiveView('jobs')}>See all <Icon name="arrowRight" size={14} /></button>
-          </div>
-          <div className="retro-list">
-            {topRecommendations.length === 0 ? (
-              <div className="retro-empty"><Icon name="spark" />Complete your profile to generate AI-ranked job matches.</div>
-            ) : topRecommendations.map((job, index) => (
-              <div className="retro-list-item" key={job.id || job.position}>
-                <CompanyBadge text={job.companyLogo || job.logo} tone={toneClass[index % toneClass.length]} size={42} />
-                <div>
-                  <strong>{job.position}</strong>
-                  <span>{job.company} - {job.location}</span>
-                </div>
-                <Pill tone="sage" filled>{job.match}% match</Pill>
-                <button className="retro-mini-action" onClick={() => handleQuickApply(job.id)}>Apply</button>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="retro-card retro-section-card">
-          <h2>Profile strength</h2>
-          <div className="retro-progress"><span style={{ width: `${displayUserProfile.profileComplete}%` }} /></div>
-          <p className="retro-muted">{displayUserProfile.profileComplete}% complete</p>
-          <div className="retro-checklist">
-            {profileChecklist.map((item) => (
-              <div key={item.label} className={item.completed ? 'complete' : ''}>
-                <Icon name={item.completed ? 'check' : 'clock'} size={14} />
-                {item.label}
-              </div>
-            ))}
-          </div>
-          <button className="retro-primary-button full" onClick={() => setShowProfile(true)}>Complete Profile</button>
-        </section>
-      </div>
-
-      <section className="retro-card retro-section-card">
-        <div className="retro-section-header">
-          <h2>Recent applications</h2>
-          <select className="retro-select" value={selectedFilter} onChange={(event) => setSelectedFilter(event.target.value)}>
-            <option value="all">All Status</option>
-            <option value="applied">Applied</option>
-            <option value="interview">Interview</option>
-            <option value="offer">Offer</option>
-          </select>
-        </div>
-        <div className="retro-application-grid">
-          {filteredApplications.slice(0, 4).map((app, index) => (
-            <article className="retro-application-card" key={app.id}>
-              <CompanyBadge text={app.companyLogo} tone={toneClass[index % toneClass.length]} size={40} />
-              <div>
-                <strong>{app.position}</strong>
-                <span>{app.company}</span>
-              </div>
-              <Pill tone={app.status === 'interview_scheduled' ? 'sage' : 'yellow'} filled>{app.status?.replace('_', ' ') || 'Applied'}</Pill>
-            </article>
-          ))}
-          {filteredApplications.length === 0 && <div className="retro-empty"><Icon name="briefcase" />No applications yet.</div>}
-        </div>
-      </section>
-
-      {insights.length > 0 && (
-        <section className="retro-card retro-section-cards">
-          <div className="retro-section-header">
-            <h2>AI insights</h2>
-            <span>{insights.length} signals</span>
-          </div>
-          <div className="retro-tip-grid">
-            {insights.slice(0, 3).map((insight, index) => (
-              <div className="retro-tip" key={`${insight.title}-${index}`}>
-                <Icon name="spark" size={15} />
-                <span><strong>{insight.title}</strong> {insight.message}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-    </div>
-  );
-
   const renderDiscoverView = () => (
     <div className="retro-page discover-view">
       <section className="retro-card retro-discover-hero">
@@ -933,14 +1183,29 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
     </div>
   );
 
+  const handleRegistrationComplete = () => {
+    // After successful company registration/login, go to recruiter dashboard
+    setActiveView('recruiter-analytics');
+    fetchRecruiterJobs();
+  };
+
   const renderContent = () => {
     if (activeView === 'jobs') {
       return <JobPortal onCompleteProfile={() => setShowProfile(true)} initialSearchQuery={searchQuery} initialLocation={searchLocation} />;
     }
+    if (activeView === 'company-page') {
+      return (
+        <CompanyRegistration
+          onRegistrationComplete={handleRegistrationComplete}
+          onBack={() => setActiveView('overview')}
+        />
+      );
+    }
     if (activeView === 'post-job') return renderPostJobView();
-    if (activeView === 'recruiter-analytics') return renderRecruiterAnalyticsView();
+    if (activeView === 'recruiter-analytics') return <RecruiterDashboard onLogout={onLogout} />;
     if (activeView === 'applications') return <Applications />;
     if (activeView === 'saved') return <SavedJobs />;
+    if (activeView === 'insights') return renderInsightsView();
     if (activeView === 'coach') {
       return (
         <div className="career-coach-view">
@@ -996,14 +1261,20 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
     );
   }
 
+  const isRecruiterView = activeView === 'recruiter-analytics';
+
+  if (isRecruiterView) {
+    return <RecruiterDashboard onLogout={onLogout} />;
+  }
+
   return (
     <div className="dashboard retro-app-shell">
       {showProfile && <CandidateProfile onClose={() => setShowProfile(false)} onProfileUpdated={() => fetchDashboardData({ silent: true })} />}
 
       <header className="retro-topbar">
         <div className="retro-logo">
-          <div className="retro-logo-mark">C</div>
-          <span>CareerHub</span>
+          <div className="retro-logo-mark"> JJ </div>
+          <span>Job iJob</span>
         </div>
         <div className="retro-top-actions">
           <div className="business-menu-wrapper">
@@ -1046,11 +1317,6 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
               </button>
             ))}
           </nav>
-          {/*<div className="retro-profile-meter">
-            <p>Profile strength</p>
-            <div className="retro-progress small"><span style={{ width: `${displayUserProfile.profileComplete}%` }} /></div>
-            <small>{displayUserProfile.profileComplete}% - add Git to skills</small>
-          </div>*/}
         </aside>
 
         <main className="retro-main">
@@ -1061,4 +1327,5 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
   );
 }
 
+export { Icon };
 export default Dashboard;
