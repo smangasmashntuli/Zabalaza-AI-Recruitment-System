@@ -135,6 +135,29 @@ export const isAuthenticated = () => {
 };
 
 /**
+ * Get current user's numeric ID from backend
+ * @returns {Promise<Object|null>} - User ID info
+ */
+export const getMyId = async () => {
+  const token = getAccessToken();
+  if (!token) return null;
+
+  try {
+    const response = await fetch(`${API_ENDPOINTS.AUTH}/me/id`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching user ID:', error);
+    return null;
+  }
+};
+
+/**
  * Get current user from token or localStorage
  * @returns {Object|null} - Current user data
  */
