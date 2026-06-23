@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm, HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from ..core.dependencies import get_db
-from ..core.security import verify_password, get_password_hash, create_access_token, create_refresh_token
+from ..core.security import verify_password, get_password_hash, create_access_token, create_refresh_token, verify_token
 from ..models import User, UserRole, Candidate
 from ..schemas import UserCreate, Token, User as UserSchema
 
@@ -93,3 +93,19 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         "refresh_token": refresh_token,
         "token_type": "bearer"
     }
+
+
+@router.get("/me/id")
+def get_my_id(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()), db: Session = Depends(get_db)):
+    """Get current user's numeric ID."""
+    token = credentials.credentials
+    payload = verify_token(token, "access")
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    username = payload.get("sub")
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"id": user.id, "username": user.username, "role": user.role.value}
