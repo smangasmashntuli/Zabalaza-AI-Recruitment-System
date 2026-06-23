@@ -114,6 +114,10 @@ export const applyForJob = async (applicationData) => {
   return post(`${API_ENDPOINTS.CANDIDATES}/me/applications`, applicationData);
 };
 
+export const generateCoverLetter = async (payload) => {
+  return post(`${API_ENDPOINTS.CANDIDATES}/me/generate-cover-letter`, payload);
+};
+
 export const saveJob = async (jobPayload) => {
   return post(`${API_ENDPOINTS.CANDIDATES}/me/saved-jobs`, jobPayload);
 };
