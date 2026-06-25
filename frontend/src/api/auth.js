@@ -143,7 +143,7 @@ export const getMyId = async () => {
   if (!token) return null;
 
   try {
-    const response = await fetch(`${API_ENDPOINTS.AUTH}/me/id`, {
+    const response = await fetch(`${API_ENDPOINTS.AUTH.LOGIN.replace('/login', '/me/id')}`, {
       headers: {
         'Authorization': `Bearer ${token}`,
       },
@@ -195,5 +195,30 @@ export const getCurrentUser = () => {
     console.error('Error decoding token:', error);
     return null;
   }
+};
+
+/**
+ * Reset password (simple version - no email verification)
+ * @param {string} email - User's email
+ * @param {string} newPassword - New password
+ * @returns {Promise<Object>} - Response message
+ */
+export const resetPassword = async (email, newPassword) => {
+  const response = await fetch(`${API_ENDPOINTS.AUTH.LOGIN.replace('/login', '/reset-password')}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, new_password: newPassword }),
+  });
+
+  const data = await parseApiResponse(response);
+
+  if (!response.ok) {
+    const errorMessage = data?.detail || data?.message || `Password reset failed (${response.status})`;
+    throw new Error(errorMessage);
+  }
+
+  return data;
 };
 

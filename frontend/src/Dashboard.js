@@ -1273,8 +1273,14 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
 
       <header className="retro-topbar">
         <div className="retro-logo">
-          <div className="retro-logo-mark"> JJ </div>
-          <span>Job iJob</span>
+          <div className="retro-logo-mark">
+            <img
+              src="%PUBLIC_URL%/zabalaza_logo_circle.png"
+              alt="Logo"
+              className="logo-image"
+            />
+          </div>
+          <span>Zabalaza</span>
         </div>
         <div className="retro-top-actions">
           <div className="business-menu-wrapper">

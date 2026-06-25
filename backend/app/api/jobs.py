@@ -185,7 +185,7 @@ def get_my_jobs(
 
     return result
 
-@router.get("/job_id/applications")
+@router.get("/{job_id}/applications")
 def get_job_applications(
         job_id: int,
         current_user: User = Depends(get_current_active_user),

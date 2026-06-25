@@ -4,8 +4,10 @@ from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any, cast
 import json
 import logging
+import os
 from ..core.dependencies import get_db, get_current_active_user
 from ..models import User, Candidate, Application, Job, ApplicationStatus, SavedJob, Notification, JobStatus
+from ..services.pdf_service import pdf_service
 from ..schemas import (
     Candidate as CandidateSchema,
     CandidateUpdate,
@@ -1058,10 +1060,20 @@ def get_resume_tailoring(
         from ..services.gemini_service import get_gemini_service
         gemini = get_gemini_service()
 
+        # Load resume training instructions
+        resume_instructions = ""
+        try:
+            instructions_path = os.path.join(os.path.dirname(__file__), '..', '..', 'CV', 'resume.txt')
+            with open(instructions_path, 'r', encoding='utf-8') as f:
+                resume_instructions = f.read()
+        except Exception:
+            pass  # File not found is okay, we'll use default behavior
+
         suggestions = gemini.get_resume_tailoring_suggestions(
             job_title=job.title,
             job_description=job.description,
-            current_resume=candidate.resume_text[:500] if candidate.resume_text else candidate.profile_summary or ""
+            current_resume=candidate.resume_text[:500] if candidate.resume_text else candidate.profile_summary or "",
+            training_instructions=resume_instructions
         )
         return {"suggestions": suggestions}
     except Exception as e:
@@ -1190,6 +1202,96 @@ def chat_with_gemini(
         }
 
 
+@router.post("/me/generate-cover-letter")
+def generate_cover_letter(
+        payload: Dict[str, Any],
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
+):
+    """Generate a cover letter for a specific job using training instructions."""
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+
+    job_id = payload.get("job_id")
+    job_data = payload.get("job_data")
+
+    # Determine if internal or external job
+    if job_id and isinstance(job_id, int):
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        job_title = job.title
+        job_description = job.description
+        company_name = getattr(job, 'company', 'the company')
+    elif job_data:
+        job_title = job_data.get("title", "")
+        job_description = job_data.get("description", "")
+        company_name = job_data.get("company", 'the company')
+    else:
+        raise HTTPException(status_code=400, detail="job_id or job_data is required")
+
+    try:
+        from ..services.gemini_service import get_gemini_service
+        gemini = get_gemini_service()
+
+        # Load cover letter training instructions
+        cover_letter_instructions = ""
+        try:
+            instructions_path = os.path.join(os.path.dirname(__file__), '..', '..', 'CV', 'coverletter.txt')
+            with open(instructions_path, 'r', encoding='utf-8') as f:
+                cover_letter_instructions = f.read()
+        except Exception:
+            pass  # File not found is okay, we'll use default behavior
+
+        # Build candidate info
+        candidate_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip() or current_user.username
+        candidate_email = current_user.email
+        candidate_phone = candidate.phone or ""
+
+        # Build the prompt with training instructions
+        prompt = f"""You are an expert cover letter writer. Generate a professional, personalized cover letter for this specific job application.
+
+{cover_letter_instructions if cover_letter_instructions else ''}
+
+JOB DETAILS:
+- Position: {job_title}
+- Company: {company_name}
+- Description: {job_description[:500]}
+
+CANDIDATE INFORMATION:
+- Name: {candidate_name}
+- Email: {candidate_email}
+- Phone: {candidate_phone}
+- Professional Title: {candidate.title or 'Professional'}
+- Summary: {candidate.profile_summary or ''}
+- Skills: {', '.join(json.loads(candidate.skills) if candidate.skills else [])[:200]}
+- Experience: {candidate.experience_years or 0} years
+
+INSTRUCTIONS:
+1. Write a professional cover letter addressed to the hiring manager
+2. DO NOT mention match scores or percentages
+3. Focus on the candidate's relevant skills and experience for THIS specific role
+4. Be specific about why this candidate is a good fit for THIS job
+5. Keep it concise (3-4 paragraphs)
+6. Use the candidate's actual name and information
+7. Make it sound professional and genuine, not generic
+
+Generate ONLY the cover letter text, no explanations or markdown."""
+
+        response = gemini.client.generate_content(prompt)
+        cover_letter = response.text.strip()
+
+        return {
+            "cover_letter": cover_letter,
+            "job_title": job_title,
+            "company": company_name
+        }
+    except Exception as e:
+        logger.error(f"Error generating cover letter: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate cover letter")
+
+
 @router.post("/me/button-context")
 def get_button_context(
         button_request: Dict[str, Any],
@@ -1292,3 +1394,273 @@ def get_button_context(
             "query": "",
             "error": str(e)
         }
+
+
+@router.post("/me/apply-with-documents")
+async def apply_with_documents(
+        job_id: int = None,
+        cover_letter: str = None,
+        resume_text: str = None,
+        use_optimized_resume: bool = False,
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
+):
+    """
+    Enhanced application endpoint that generates ATS-friendly PDF documents
+    containing both the resume and cover letter in a single PDF.
+    
+    If resume_text is provided, it uses that (edited by user).
+    Otherwise, it uses the candidate's profile resume_text.
+    """
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+
+    if not job_id:
+        raise HTTPException(status_code=400, detail="job_id is required")
+
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Check if already applied
+    existing = db.query(Application).filter(
+        Application.candidate_id == candidate.id,
+        Application.job_id == job_id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Already applied for this job")
+
+    # Calculate match score
+    match_score = 0.0
+    match_explanation = "No matching data available"
+    if candidate.embedding and job.embedding:
+        candidate_emb = json.loads(candidate.embedding)
+        job_emb = json.loads(job.embedding)
+        candidate_dict = {
+            'skills': candidate.skills,
+            'experience_years': candidate.experience_years,
+            'education': candidate.education
+        }
+        job_dict = {
+            'title': job.title,
+            'description': job.description,
+            'requirements': job.requirements,
+            'experience_level': job.experience_level,
+            'skills': job.skills
+        }
+        match_score, match_explanation = ai_service.match_candidate_to_job(
+            candidate_emb, job_emb, candidate_dict, job_dict
+        )
+
+    # Get user info for the PDF
+    user = db.query(User).filter(User.id == current_user.id).first()
+    
+    # Use edited resume_text if provided, otherwise use profile resume_text
+    final_resume_text = resume_text or candidate.resume_text or ""
+    
+    candidate_data = {
+        "first_name": user.first_name or "",
+        "last_name": user.last_name or "",
+        "email": user.email,
+        "phone": candidate.phone or "",
+        "location": candidate.location or "",
+        "title": candidate.title or "",
+        "linkedin": candidate.linkedin or "",
+        "github": candidate.github or "",
+        "profile_summary": final_resume_text,  # Use the edited resume text
+        "skills": candidate.skills,
+        "skills_list": json.loads(candidate.skills) if candidate.skills else [],
+        "work_experience": candidate.work_experience,
+        "work_experience_list": json.loads(candidate.work_experience) if candidate.work_experience else [],
+        "education": candidate.education,
+        "education_list": json.loads(candidate.education) if candidate.education else [],
+        "certifications": json.loads(candidate.certifications) if candidate.certifications else [],
+        "projects": json.loads(candidate.projects) if candidate.projects else [],
+        "resume_text": final_resume_text,
+    }
+
+    company_name = getattr(job, 'company', getattr(job, 'recruiter', None))
+    if company_name and not isinstance(company_name, str):
+        company_name = "the company"
+
+    # Generate combined PDF (cover letter + resume)
+    pdf_path = pdf_service.generate_combined_pdf(
+        candidate_data=candidate_data,
+        cover_letter_text=cover_letter or "",
+        job_title=job.title,
+        company_name=company_name or "the company"
+    )
+
+    # Generate CV strength score
+    cv_strength_score = min(100, int((match_score * 100) * 0.8 + 20))
+
+    # Create application with PDF path
+    application = Application(
+        job_id=job_id,
+        candidate_id=candidate.id,
+        cover_letter=cover_letter or "",
+        status=ApplicationStatus.PENDING,
+        match_score=match_score,
+        match_explanation=match_explanation
+    )
+    db.add(application)
+    db.commit()
+    db.refresh(application)
+
+    # Store the PDF path on the candidate for retrieval
+    candidate.resume_path = pdf_path
+    db.commit()
+
+    _ensure_notification(
+        db, candidate.id, "application_follow_up",
+        f"Follow up on {job.title}",
+        "Your application has been submitted with a professionally formatted PDF.",
+        job.id,
+    )
+
+    return {
+        "application_id": application.id,
+        "message": "Application submitted successfully with PDF documents",
+        "match_score": round(match_score * 100, 1),
+        "cv_strength_score": cv_strength_score,
+        "pdf_path": pdf_path,
+        "match_explanation": match_explanation
+    }
+
+
+@router.post("/me/optimize-resume")
+async def optimize_resume(
+        job_id: int = None,
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
+):
+    """
+    Optimize the candidate's resume for a specific job and return an ATS-friendly PDF.
+    """
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+
+    if not candidate.resume_text:
+        raise HTTPException(status_code=400, detail="No resume found. Please upload a resume in your profile first.")
+
+    job = None
+    job_title = ""
+    job_description = ""
+    if job_id:
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if job:
+            job_title = job.title
+            job_description = job.description
+
+    # Get Gemini to generate optimized resume content if available
+    optimized_summary = candidate.profile_summary or ""
+    optimized_skills = candidate.skills or "[]"
+    optimized_experience = candidate.work_experience or "[]"
+
+    try:
+        from ..services.gemini_service import get_gemini_service
+        gemini = get_gemini_service()
+
+        if gemini and gemini.enabled:
+            # Load resume training instructions
+            resume_instructions = ""
+            try:
+                instructions_path = os.path.join(os.path.dirname(__file__), '..', '..', 'CV', 'resume.txt')
+                with open(instructions_path, 'r', encoding='utf-8') as f:
+                    resume_instructions = f.read()
+            except Exception:
+                pass
+
+            skills_list = json.loads(candidate.skills) if candidate.skills else []
+            
+            # Extract keywords from job description
+            job_keywords = []
+            if job_description:
+                # Simple keyword extraction - get important words from job description
+                import re
+                words = re.findall(r'\b[A-Za-z]{3,}\b', job_description.lower())
+                # Filter out common words
+                stop_words = {'the', 'and', 'for', 'with', 'that', 'this', 'will', 'you', 'your', 'are', 'have', 'has', 'been', 'from', 'not', 'but', 'what', 'all', 'were', 'when', 'there', 'their', 'would', 'could', 'should', 'does', 'did', 'can', 'may', 'our', 'out', 'who', 'get', 'has', 'had', 'his', 'her', 'its', 'into', 'more', 'most', 'other', 'some', 'such', 'than', 'then', 'them', 'these', 'they', 'this', 'those', 'through', 'under', 'very', 'well', 'were', 'what', 'when', 'where', 'which', 'while', 'who', 'whom', 'why', 'with', 'within', 'without'}
+                job_keywords = [w for w in words if w not in stop_words and len(w) > 3][:20]
+
+            prompt = f"""You are an ATS resume optimization expert. Analyze the candidate's resume against the job requirements.
+
+{resume_instructions if resume_instructions else ''}
+
+CANDIDATE CURRENT INFO:
+- Skills: {', '.join(skills_list[:15])}
+- Experience: {candidate.experience_years or 0} years
+- Current title: {candidate.title or 'Professional'}
+- Summary: {candidate.profile_summary or ''}
+
+{f'JOB TARGET: {job_title}' if job_title else ''}
+{f'JOB DESCRIPTION: {job_description[:400]}' if job_description else ''}
+{f'KEY JOB KEYWORDS TO MATCH: {", ".join(job_keywords)}' if job_keywords else ''}
+
+TASK:
+1. If the candidate's resume already contains most of the key job keywords, respond with: "Your resume looks good! It already includes key keywords like: [list 3-4 matching keywords]."
+2. If optimization is needed, provide specific suggestions on what keywords or skills to add from the job description.
+3. Keep the response concise (2-3 sentences max).
+
+Do NOT generate a full resume. Just provide brief optimization feedback."""
+
+            response = gemini.client.generate_content(prompt)
+            optimized_text = response.text.strip()
+
+            # Get user info
+            user = db.query(User).filter(User.id == current_user.id).first()
+            candidate_data = {
+                "first_name": user.first_name or "",
+                "last_name": user.last_name or "",
+                "email": user.email,
+                "phone": candidate.phone or "",
+                "location": candidate.location or "",
+                "title": candidate.title or "",
+                "linkedin": candidate.linkedin or "",
+                "github": candidate.github or "",
+                "profile_summary": candidate.profile_summary or optimized_text,
+                "skills": candidate.skills,
+                "skills_list": skills_list,
+                "work_experience": candidate.work_experience,
+                "work_experience_list": json.loads(candidate.work_experience) if candidate.work_experience else [],
+                "education": candidate.education,
+                "education_list": json.loads(candidate.education) if candidate.education else [],
+            }
+
+            # Generate the PDF
+            pdf_path = pdf_service.generate_resume_pdf(candidate_data)
+
+            return {
+                "optimized_text": optimized_text,
+                "pdf_path": pdf_path,
+                "message": "Resume analysis completed"
+            }
+
+    except Exception as e:
+        logger.error(f"Error optimizing resume: {e}")
+
+    # Fallback: Generate PDF with existing data
+    user = db.query(User).filter(User.id == current_user.id).first()
+    skills_list = json.loads(candidate.skills) if candidate.skills else []
+    candidate_data = {
+        "first_name": user.first_name or "",
+        "last_name": user.last_name or "",
+        "email": user.email,
+        "phone": candidate.phone or "",
+        "location": candidate.location or "",
+        "title": candidate.title or "",
+        "profile_summary": candidate.profile_summary or "",
+        "skills": candidate.skills,
+        "skills_list": skills_list,
+        "work_experience": candidate.work_experience,
+        "education": candidate.education,
+    }
+    pdf_path = pdf_service.generate_resume_pdf(candidate_data)
+
+    return {
+        "optimized_text": "Your resume has been processed. Upload a more detailed resume for better optimization suggestions.",
+        "pdf_path": pdf_path,
+        "message": "Resume PDF generated from existing profile data"
+    }

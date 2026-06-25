@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from fastapi.security import OAuth2PasswordRequestForm, HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -109,3 +109,25 @@ def get_my_id(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
         raise HTTPException(status_code=404, detail="User not found")
     
     return {"id": user.id, "username": user.username, "role": user.role.value}
+
+
+@router.post("/reset-password")
+def reset_password(
+    email: str = Body(..., embed=True),
+    new_password: str = Body(..., embed=True),
+    db: Session = Depends(get_db)
+):
+    """
+    Simple password reset (no email verification for now).
+    In production, this should send an email with a reset token.
+    """
+    # Find user by email
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update password
+    user.hashed_password = get_password_hash(new_password)
+    db.commit()
+    
+    return {"message": "Password reset successful"}

@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "fellow": "^7.4.0"
+    "fellow": "^7.4.0",
+    "recharts": "^3.8.1"
   }
 }

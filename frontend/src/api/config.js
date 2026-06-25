@@ -9,6 +9,7 @@ export const API_ENDPOINTS = {
   },
   CANDIDATES: `${API_V1}/candidates`,
   JOBS: `${API_V1}/jobs`,
+  APPLICATIONS: `${API_V1}/applications`,
   MATCHES: `${API_V1}/matches`,
   UPLOADS: `${API_V1}/uploads`,
   INTELLIGENCE: `${API_V1}/intelligence`,

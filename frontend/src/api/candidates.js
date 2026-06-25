@@ -118,6 +118,65 @@ export const generateCoverLetter = async (payload) => {
   return post(`${API_ENDPOINTS.CANDIDATES}/me/generate-cover-letter`, payload);
 };
 
+/**
+ * Apply for a job with PDF document generation (enhanced)
+ * Generates ATS-friendly PDF with resume and cover letter
+ */
+export const applyWithDocuments = async ({ job_id, cover_letter = '', resume_text = '' }) => {
+  const token = localStorage.getItem('access_token');
+  
+  // Build request body
+  const requestBody = {
+    job_id,
+    cover_letter,
+    ...(resume_text && { resume_text })
+  };
+  
+  const response = await fetch(`${API_ENDPOINTS.CANDIDATES}/me/apply-with-documents`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(requestBody)
+  });
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to submit application' }));
+    throw new Error(error.detail || 'Failed to submit application');
+  }
+  return response.json();
+};
+
+/**
+ * Optimize resume for a specific job, returns ATS-friendly PDF
+ */
+export const optimizeResume = async (jobId) => {
+  const token = localStorage.getItem('access_token');
+  const response = await fetch(`${API_ENDPOINTS.CANDIDATES}/me/optimize-resume?job_id=${jobId}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to optimize resume' }));
+    throw new Error(error.detail || 'Failed to optimize resume');
+  }
+  return response.json();
+};
+
+/**
+ * Download a generated PDF file
+ */
+export const downloadPdf = (pdfPath) => {
+  const token = localStorage.getItem('access_token');
+  // PDFs are stored in uploads/generated_pdfs/ directory
+  const pdfUrl = `http://127.0.0.1:8000/uploads/generated_pdfs/${pdfPath.split('/').pop()}`;
+  window.open(pdfUrl, '_blank');
+};
+
 export const saveJob = async (jobPayload) => {
   return post(`${API_ENDPOINTS.CANDIDATES}/me/saved-jobs`, jobPayload);
 };

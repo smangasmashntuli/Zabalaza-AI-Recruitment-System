@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import './Login.css';
-import { loginUser } from './api/auth';
+import { loginUser, resetPassword } from './api/auth';
 
 const Login = ({onSwitchToSignUp}) => {
     const [formData, setFormData] = useState({
@@ -10,6 +10,13 @@ const Login = ({onSwitchToSignUp}) => {
     const [errors, setErrors] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [apiError, setApiError] = useState('');
+    const [showResetModal, setShowResetModal] = useState(false);
+    const [resetEmail, setResetEmail] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [resetError, setResetError] = useState('');
+    const [resetSuccess, setResetSuccess] = useState('');
+    const [isResetting, setIsResetting] = useState(false);
 
     const handleChange = (e) => {
         const {name, value } = e.target;
@@ -73,6 +80,43 @@ const Login = ({onSwitchToSignUp}) => {
         }
     };
 
+    const handleResetPassword = async (e) => {
+        e.preventDefault();
+        setResetError('');
+        setResetSuccess('');
+
+        // Validate passwords match
+        if (newPassword !== confirmPassword) {
+            setResetError('Passwords do not match');
+            return;
+        }
+
+        if (newPassword.length < 6) {
+            setResetError('Password must be at least 6 characters');
+            return;
+        }
+
+        setIsResetting(true);
+
+        try {
+            await resetPassword(resetEmail, newPassword);
+            setResetSuccess('Password reset successful! You can now login with your new password.');
+            setResetEmail('');
+            setNewPassword('');
+            setConfirmPassword('');
+            
+            // Close modal after 2 seconds
+            setTimeout(() => {
+                setShowResetModal(false);
+                setResetSuccess('');
+            }, 2000);
+        } catch (error) {
+            setResetError(error.message || 'Failed to reset password. Please try again.');
+        } finally {
+            setIsResetting(false);
+        }
+    };
+
     return (
         <div className="login-container">
             <div className="login-card">
@@ -117,7 +161,12 @@ const Login = ({onSwitchToSignUp}) => {
                             <input type="checkbox" />
                             <span>Remember me</span>
                         </label>
-                        <button type="button" className="forgot-password" style={{ background: 'none', border: 'none', padding: 0 }}>
+                        <button 
+                            type="button" 
+                            className="forgot-password" 
+                            style={{ background: 'none', border: 'none', padding: 0 }}
+                            onClick={() => setShowResetModal(true)}
+                        >
                             Forgot password?
                         </button>
                     </div>
@@ -134,6 +183,70 @@ const Login = ({onSwitchToSignUp}) => {
           <p>Don't have an account? <button type="button" className="forgot-password" style={{ background: 'none', border: 'none', padding: 0 }} onClick={onSwitchToSignUp}>Sign up</button></p>
         </div>
       </div>
+
+      {/* Password Reset Modal */}
+      {showResetModal && (
+        <div className="modal-overlay" onClick={() => setShowResetModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Reset Password</h3>
+              <button type="button" className="close-button" onClick={() => setShowResetModal(false)}>✕</button>
+            </div>
+            
+            <form onSubmit={handleResetPassword} className="reset-password-form">
+              {resetError && <div className="api-error-message">{resetError}</div>}
+              {resetSuccess && <div className="success-message">{resetSuccess}</div>}
+              
+              <div className="form-group">
+                <label htmlFor="resetEmail">Email address</label>
+                <input
+                  type="email"
+                  id="resetEmail"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="Enter your registered email"
+                  required
+                />
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="newPassword">New Password</label>
+                <input
+                  type="password"
+                  id="newPassword"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password (min 6 characters)"
+                  required
+                  minLength={6}
+                />
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="confirmPassword">Confirm New Password</label>
+                <input
+                  type="password"
+                  id="confirmPassword"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  required
+                  minLength={6}
+                />
+              </div>
+              
+              <div className="form-actions">
+                <button type="submit" className="login-button" disabled={isResetting}>
+                  {isResetting ? 'Resetting...' : 'Reset Password'}
+                </button>
+                <button type="button" className="cancel-button" onClick={() => setShowResetModal(false)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

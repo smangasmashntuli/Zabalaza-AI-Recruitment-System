@@ -3,6 +3,7 @@ import './JobPortal.css';
 import { getHybridJobs } from './api/jobs'; // Only import getHybridJobs
 import {
   applyForJob,
+  applyWithDocuments,
   chatWithGemini,
   getButtonContext,
   getCandidateProfile,
@@ -13,6 +14,7 @@ import {
   getProfileImprovementTips,
   getSavedJobs,
   saveJob,
+  generateCoverLetter,
 } from './api/candidates';
 
 const Icon = ({ name, size = 20 }) => {
@@ -405,30 +407,22 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
       setGeneratingCoverLetter(true);
       setGeneratedCoverLetter('');
       const jobId = selectedJob.job_id || selectedJob.id;
-      const result = await getMatchAnalysis(jobId, selectedJob);
-      const analysis = result || {};
-      const summary = analysis.summary || '';
-      const strengths = Array.isArray(analysis.strengths) ? analysis.strengths.join(', ') : '';
-      const matchScore = Math.round((analysis.match_score || 0) * 100);
+      
+      const payload = {
+        job_id: jobId,
+        job_data: selectedJob
+      };
 
-      const coverLetter = `Dear Hiring Manager,
+      const result = await generateCoverLetter(payload);
+      const coverLetter = result?.cover_letter || '';
 
-I am writing to express my strong interest in the ${selectedJob.title} position at ${selectedJob.company || 'your organization'}. With a match score of ${matchScore}% based on my profile alignment with your requirements, I am confident that I can bring significant value to your team.
-
-${summary ? `My background aligns well with this role: ${summary}` : ''}
-
-${strengths ? `Key strengths I bring to this position include: ${strengths}.` : ''}
-
-I am excited about the opportunity to contribute to your team and would welcome the chance to discuss how my skills and experience can benefit your organization.
-
-Thank you for considering my application. I look forward to hearing from you.
-
-Best regards,
-${candidateProfile?.first_name || ''} ${candidateProfile?.last_name || ''}`;
-
-      setGeneratedCoverLetter(coverLetter);
-      setShowCoverLetterPreview(true);
-      setActionNotice('Cover letter generated! Review it below and copy it to the cover letter field.');
+      if (coverLetter) {
+        setGeneratedCoverLetter(coverLetter);
+        setShowCoverLetterPreview(true);
+        setActionNotice('Cover letter generated with AI! Review it below and use it in your application.');
+      } else {
+        setActionNotice('Failed to generate cover letter. Please try again.');
+      }
     } catch (err) {
       setActionNotice(err.message || 'Failed to generate cover letter');
     } finally {
@@ -449,18 +443,24 @@ ${candidateProfile?.first_name || ''} ${candidateProfile?.last_name || ''}`;
     try {
       setApplying(true);
       const jobId = selectedJob.job_id || selectedJob.id;
-      await applyForJob({
+      
+      // Use the enhanced application endpoint that generates PDFs
+      // Send the edited resume text (if user edited it) or empty string to use profile resume
+      const result = await applyWithDocuments({
         job_id: jobId,
         cover_letter: applicationData.coverLetter || `Application for ${selectedJob.title}`,
+        resume_text: applicationData.resumeText || '',  // Send edited resume or empty to use profile
       });
+      
       setAppliedJobIds((prev) => [...new Set([...prev, jobId])]);
       setShowApplicationModal(false);
       setSelectedJob(null);
-      setApplicationData({ coverLetter: '' });
+      setApplicationData({ coverLetter: '', resumeText: '' });
       setOptimizedResumeText('');
       setGeneratedCoverLetter('');
       setShowCoverLetterPreview(false);
-      alert('Application submitted successfully!');
+      
+      alert(`Application submitted successfully!\nMatch Score: ${result.match_score}%\nCV Strength: ${result.cv_strength_score}%`);
     } catch (err) {
       alert(err.message || 'Failed to submit application');
     } finally {
@@ -824,39 +824,80 @@ ${candidateProfile?.first_name || ''} ${candidateProfile?.last_name || ''}`;
                   </div>
                 )}
 
-                {candidateProfile?.resume_text && (
-                  <div className="form-group">
-                    <label className="form-label">AI Resume Optimization</label>
-                    <p style={{ fontSize: '13px', color: 'var(--ink-mute)', marginBottom: '8px' }}>
-                      Get ATS-friendly suggestions tailored to this job
-                    </p>
-                    <button
-                      type="button"
-                      className="retro-ghost-button"
-                      onClick={handleOptimizeResumeForJob}
-                      disabled={optimizingResume}
-                    >
-                      {optimizingResume ? 'Analyzing job requirements...' : '✨ Optimize my resume for this job'}
-                    </button>
-                    {optimizedResumeText && (
-                      <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(14,165,233,0.06)', borderRadius: '8px', fontSize: '13px', lineHeight: 1.6 }}>
-                        <strong>ATS Optimization Tips:</strong>
-                        <pre style={{ whiteSpace: 'pre-wrap', margin: '8px 0 0 0', fontFamily: 'inherit' }}>{optimizedResumeText}</pre>
+                {/* Resume Section */}
+                <div className="form-group">
+                  <label className="form-label">Resume</label>
+                  <p style={{ fontSize: '13px', color: 'var(--ink-mute)', marginBottom: '8px' }}>
+                    Review and edit your resume below, or upload a new one
+                  </p>
+                  
+                  {/* Show existing resume text */}
+                  {candidateProfile?.resume_text && !applicationData.resumeFile && (
+                    <div style={{ marginBottom: '12px' }}>
+                      <textarea
+                        rows={12}
+                        className="form-textarea"
+                        value={applicationData.resumeText || candidateProfile.resume_text}
+                        onChange={(e) => setApplicationData({ ...applicationData, resumeText: e.target.value })}
+                        placeholder="Your resume text will appear here. You can edit it to optimize for this job."
+                        style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                      />
+                      <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
+                        <button
+                          type="button"
+                          className="retro-ghost-button"
+                          onClick={handleOptimizeResumeForJob}
+                          disabled={optimizingResume}
+                          style={{ fontSize: '12px', padding: '6px 12px' }}
+                        >
+                          {optimizingResume ? 'Optimizing...' : '✨ Optimize with AI'}
+                        </button>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', alignSelf: 'center' }}>
+                          AI will suggest improvements for ATS
+                        </span>
                       </div>
+                      {optimizedResumeText && (
+                        <div style={{ marginTop: '8px', padding: '10px', background: 'rgba(14,165,233,0.06)', borderRadius: '6px', fontSize: '12px', lineHeight: 1.5 }}>
+                          <strong>💡 AI Suggestions:</strong>
+                          <pre style={{ whiteSpace: 'pre-wrap', margin: '4px 0 0 0', fontFamily: 'inherit' }}>{optimizedResumeText}</pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Upload new resume option */}
+                  <div style={{ marginTop: '12px' }}>
+                    <label style={{ display: 'inline-block', cursor: 'pointer', fontSize: '13px', color: 'var(--sage)' }}>
+                      📄 Or upload a different resume file
+                      <input
+                        type="file"
+                        accept=".pdf,.docx,.doc,.txt"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          setApplicationData({ ...applicationData, resumeFile: file, resumeText: '' });
+                        }}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+                    {applicationData.resumeFile && (
+                      <p style={{ fontSize: '12px', color: 'var(--sage)', marginTop: '4px' }}>
+                        ✓ New resume selected: {applicationData.resumeFile.name}
+                      </p>
                     )}
                   </div>
-                )}
+                </div>
 
+                {/* Cover Letter Section */}
                 <div className="form-group">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <label className="form-label" style={{ margin: 0 }}>Cover Letter (Optional)</label>
+                    <label className="form-label" style={{ margin: 0 }}>Cover Letter</label>
                     <button
                       type="button"
                       className="retro-link-button"
                       onClick={handleGenerateCoverLetter}
                       disabled={generatingCoverLetter}
                     >
-                      {generatingCoverLetter ? 'Generating...' : '✨ Generate cover letter'}
+                      {generatingCoverLetter ? 'Generating...' : '✨ Generate with AI'}
                     </button>
                   </div>
                   {showCoverLetterPreview && generatedCoverLetter && (
@@ -864,7 +905,7 @@ ${candidateProfile?.first_name || ''} ${candidateProfile?.last_name || ''}`;
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                         <strong>Generated Cover Letter</strong>
                         <button type="button" className="retro-primary-button" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={useGeneratedCoverLetter}>
-                          Use this cover letter
+                          Use this
                         </button>
                       </div>
                       <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit', lineHeight: 1.6 }}>{generatedCoverLetter}</pre>
@@ -873,7 +914,7 @@ ${candidateProfile?.first_name || ''} ${candidateProfile?.last_name || ''}`;
                   <textarea
                     rows={6}
                     className="form-textarea"
-                    placeholder="Tell us why you're a good fit for this position..."
+                    placeholder="Write your cover letter or generate one with AI..."
                     value={applicationData.coverLetter}
                     onChange={(e) => setApplicationData({ ...applicationData, coverLetter: e.target.value })}
                   />
@@ -881,7 +922,7 @@ ${candidateProfile?.first_name || ''} ${candidateProfile?.last_name || ''}`;
 
                 <div className="form-actions">
                   <button type="submit" className="submit-button" disabled={applying}>
-                    {applying ? 'Submitting...' : 'Submit Application'}
+                    {applying ? 'Generating PDF & Submitting...' : 'Submit Application'}
                   </button>
                   <button type="button" onClick={() => setShowApplicationModal(false)} className="cancel-button" disabled={applying}>
                     Cancel
