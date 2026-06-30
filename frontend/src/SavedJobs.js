@@ -1,11 +1,13 @@
+// SavedJobs.js - Updated with animation support
 import { useEffect, useState } from 'react';
-import './Dashboard.css';
+import './SavedJobs.css';
 import { getSavedJobs, removeSavedJob } from './api/candidates';
 
 export default function SavedJobs() {
   const [savedJobs, setSavedJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [removingId, setRemovingId] = useState(null);
 
   const loadSavedJobs = async () => {
     try {
@@ -26,10 +28,16 @@ export default function SavedJobs() {
 
   const handleRemove = async (jobId) => {
     try {
+      setRemovingId(jobId);
       await removeSavedJob(jobId);
-      await loadSavedJobs();
+      // Wait for animation to complete before removing from state
+      setTimeout(async () => {
+        await loadSavedJobs();
+        setRemovingId(null);
+      }, 300);
     } catch (err) {
       setError(err.message || 'Failed to remove saved job');
+      setRemovingId(null);
     }
   };
 
@@ -52,16 +60,24 @@ export default function SavedJobs() {
         <div className="saved-jobs-grid">
           {savedJobs.map((item) => {
             const job = item.job || {};
+            const isRemoving = removingId === job.id;
             return (
-              <div key={item.saved_job_id || job.id} className="saved-job-card">
+              <div
+                key={item.saved_job_id || job.id}
+                className={`saved-job-card ${isRemoving ? 'removing' : ''}`}
+              >
                 <h3>{job.title}</h3>
                 <p>{job.company || 'Company'}</p>
                 <p>{job.location || 'Remote'}</p>
                 <p>{job.job_type || 'Full-time'}</p>
                 <p>{job.description?.slice(0, 180)}{job.description && job.description.length > 180 ? '...' : ''}</p>
                 <div className="view-actions-row">
-                  <button className="submit-button" onClick={() => handleRemove(job.id)}>
-                    Remove
+                  <button
+                    className="submit-button"
+                    onClick={() => handleRemove(job.id)}
+                    disabled={isRemoving}
+                  >
+                    {isRemoving ? 'Removing...' : 'Remove'}
                   </button>
                 </div>
               </div>
@@ -72,4 +88,3 @@ export default function SavedJobs() {
     </div>
   );
 }
-

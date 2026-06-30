@@ -222,12 +222,6 @@ def get_job_matches(
             detail="Candidate profile not found"
         )
 
-    if not candidate.embedding:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Please upload a resume first to get job matches"
-        )
-
     # Get active jobs
     jobs = db.query(Job).filter(Job.status == JobStatus.ACTIVE).all()
 
@@ -255,22 +249,74 @@ def get_job_matches(
 
     # Get candidate data
     candidate_dict = {
-        'resume_text': candidate.resume_text,
-        'skills': candidate.skills,
-        'experience_years': candidate.experience_years,
-        'education': candidate.education,
-        'work_experience': candidate.work_experience
+        'resume_text': candidate.resume_text or '',
+        'skills': candidate.skills or '[]',
+        'experience_years': candidate.experience_years or 0,
+        'education': candidate.education or '[]',
+        'work_experience': candidate.work_experience or '[]'
     }
 
-    candidate_embedding = json.loads(candidate.embedding)
-
-    # Find matches using AI
-    matches = ai_service.find_matching_jobs(
-        candidate_embedding,
-        jobs_dict,
-        candidate_dict,
-        top_k
-    )
+    matches = []
+    
+    # Try AI-powered matching if embeddings exist
+    if candidate.embedding:
+        try:
+            candidate_embedding = json.loads(candidate.embedding)
+            matches = ai_service.find_matching_jobs(
+                candidate_embedding,
+                jobs_dict,
+                candidate_dict,
+                top_k
+            )
+        except Exception as e:
+            print(f"AI matching failed: {e}")
+            matches = []
+    
+    # If no matches from AI, return all jobs with basic scoring
+    if not matches:
+        matches = []
+        for job in jobs_dict:
+            # Calculate basic match score based on skills overlap
+            candidate_skills = set()
+            try:
+                skills_list = json.loads(candidate_dict['skills']) if isinstance(candidate_dict['skills'], str) else candidate_dict['skills']
+                candidate_skills = {s.lower() for s in skills_list if isinstance(s, str)}
+            except:
+                pass
+            
+            job_skills = set()
+            try:
+                job_skills_list = json.loads(job['skills']) if isinstance(job['skills'], str) else job['skills']
+                job_skills = {s.lower() for s in job_skills_list if isinstance(s, str)}
+            except:
+                # Extract skills from job description
+                job_text = f"{job.get('title', '')} {job.get('description', '')} {job.get('requirements', '')}".lower()
+                job_skills = {s for s in candidate_skills if s in job_text}
+            
+            # Calculate overlap
+            if candidate_skills and job_skills:
+                overlap = len(candidate_skills.intersection(job_skills))
+                basic_score = min(0.9, 0.3 + (overlap * 0.1))  # 30% base + 10% per matching skill
+            else:
+                basic_score = 0.25  # Default low score
+            
+            matches.append({
+                'job_id': job['id'],
+                'job_title': job['title'],
+                'match_score': basic_score,
+                'match_explanation': 'Browse available positions' if basic_score < 0.5 else 'Good potential match',
+                'job_details': {
+                    'description': job.get('description', ''),
+                    'location': job.get('location', 'Remote'),
+                    'job_type': job.get('job_type'),
+                    'salary_min': job.get('salary_min'),
+                    'salary_max': job.get('salary_max'),
+                }
+            })
+        
+        # Sort by score and limit
+        matches.sort(key=lambda x: x.get('match_score', 0), reverse=True)
+        matches = matches[:top_k]
 
     # Enhance matches with LLM-powered explanations
     items = []
@@ -329,14 +375,28 @@ def get_job_matches(
         except Exception:
             career_path = None
 
-        # Suggest some alternatives (first N active jobs) with low match score so UI can display them
+        # Suggest some alternatives (first N active jobs) with calculated match scores
         suggested = []
-        for job in jobs[: min(5, len(jobs))]:
+        for job in jobs[: min(10, len(jobs))]:
+            # Calculate a basic match score even if embeddings aren't available
+            basic_score = 0.3  # Default low score
+            
+            # Try to calculate actual score if embeddings exist
+            if candidate.embedding and job.embedding:
+                try:
+                    candidate_emb = json.loads(candidate.embedding)
+                    job_emb = json.loads(job.embedding)
+                    from ..services.matching_engine import MatchingEngine
+                    engine = MatchingEngine()
+                    basic_score = engine.calculate_similarity(candidate_emb, job_emb)
+                except Exception:
+                    pass
+            
             suggested.append({
                 'job_id': job.id,
                 'job_title': job.title,
-                'match_score': 0.0,
-                'match_explanation': 'Suggested alternative — broaden your criteria',
+                'match_score': basic_score,
+                'match_explanation': 'Browse all available positions' if basic_score < 0.6 else 'Potential match',
                 'job_details': {
                     'description': job.description,
                     'location': job.location,
@@ -1073,7 +1133,7 @@ def get_resume_tailoring(
             job_title=job.title,
             job_description=job.description,
             current_resume=candidate.resume_text[:500] if candidate.resume_text else candidate.profile_summary or "",
-            training_instructions=resume_instructions
+            training_instructions=resume_instructions,
         )
         return {"suggestions": suggestions}
     except Exception as e:
@@ -1398,10 +1458,7 @@ def get_button_context(
 
 @router.post("/me/apply-with-documents")
 async def apply_with_documents(
-        job_id: int = None,
-        cover_letter: str = None,
-        resume_text: str = None,
-        use_optimized_resume: bool = False,
+        payload: Dict[str, Any],
         current_user: User = Depends(get_current_active_user),
         db: Session = Depends(get_db)
 ):
@@ -1409,9 +1466,14 @@ async def apply_with_documents(
     Enhanced application endpoint that generates ATS-friendly PDF documents
     containing both the resume and cover letter in a single PDF.
     
-    If resume_text is provided, it uses that (edited by user).
+    If resume_text is provided in payload, it uses that (edited by user).
     Otherwise, it uses the candidate's profile resume_text.
     """
+    job_id = payload.get("job_id")
+    cover_letter = payload.get("cover_letter", "")
+    resume_text = payload.get("resume_text")
+    use_optimized_resume = payload.get("use_optimized_resume", False)
+    
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate profile not found")

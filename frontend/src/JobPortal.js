@@ -850,15 +850,15 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
                           disabled={optimizingResume}
                           style={{ fontSize: '12px', padding: '6px 12px' }}
                         >
-                          {optimizingResume ? 'Optimizing...' : '✨ Optimize with AI'}
+                          {optimizingResume ? 'Optimizing...' : 'Optimize with AI'}
                         </button>
                         <span style={{ fontSize: '11px', color: 'var(--text-muted)', alignSelf: 'center' }}>
                           AI will suggest improvements for ATS
                         </span>
                       </div>
                       {optimizedResumeText && (
-                        <div style={{ marginTop: '8px', padding: '10px', background: 'rgba(14,165,233,0.06)', borderRadius: '6px', fontSize: '12px', lineHeight: 1.5 }}>
-                          <strong>💡 AI Suggestions:</strong>
+                        <div style={{ marginTop: '8px', padding: '10px', background: 'rgba(14,165,233,0.06)', color:'black', borderRadius: '6px', fontSize: '12px', lineHeight: 1.5 }}>
+                          <strong> AI Suggestions:</strong>
                           <pre style={{ whiteSpace: 'pre-wrap', margin: '4px 0 0 0', fontFamily: 'inherit' }}>{optimizedResumeText}</pre>
                         </div>
                       )}
@@ -897,12 +897,12 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
                       onClick={handleGenerateCoverLetter}
                       disabled={generatingCoverLetter}
                     >
-                      {generatingCoverLetter ? 'Generating...' : '✨ Generate with AI'}
+                      {generatingCoverLetter ? 'Generating...' : 'Generate with AI'}
                     </button>
                   </div>
                   {showCoverLetterPreview && generatedCoverLetter && (
-                    <div style={{ marginBottom: '12px', padding: '12px', background: 'rgba(140,154,110,0.1)', borderRadius: '8px', fontSize: '13px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <div style={{ marginBottom: '12px', padding: '12px', background: 'rgba(140,154,110,0.1)', borderRadius: '8px', fontSize: '13px', color:'black' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', color:'black' }}>
                         <strong>Generated Cover Letter</strong>
                         <button type="button" className="retro-primary-button" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={useGeneratedCoverLetter}>
                           Use this
@@ -977,7 +977,7 @@ export default function JobPortal({ onCompleteProfile, initialSearchQuery = '', 
                   {matchMessages.map((msg, idx) => (
                     <div key={idx} style={{ marginBottom: '10px' }}>
                       <strong>{msg.role === 'user' ? 'You' : 'Advisor'}:</strong>
-                      <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+                      <div className="chat-thread-paragraph">{msg.content}</div>
                     </div>
                   ))}
                 </div>

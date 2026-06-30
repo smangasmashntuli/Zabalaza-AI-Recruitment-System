@@ -27,8 +27,8 @@ class ResumeParser:
         self.url_pattern = re.compile(r"https?://[^\s]+", re.IGNORECASE)
 
         self.degree_patterns = [
-            "bachelor", "master", "phd", "doctorate", "associate", "diploma",
-            "b.s.", "m.s.", "b.a.", "m.a.", "bcom", "bsc", "msc", "mba",
+            "bachelor", "master", "phd", "doctorate", "associate", "diploma", "advanced diploma",
+            "b.s.", "postgraduate diploma", "m.s.", "b.a.", "m.a.", "bcom", "bsc", "msc", "mba",
         ]
         self.job_title_keywords = [
             "engineer", "developer", "analyst", "manager", "designer", "scientist",
@@ -36,14 +36,38 @@ class ResumeParser:
             "intern", "officer",
         ]
         self.section_headers = {
-            "summary": ["summary", "professional summary", "profile summary", "overview", "about me"],
+            "summary": [
+                "summary", "professional summary", "profile summary", "overview", "about me",
+                "professional profile", "career summary", "executive summary", "profile"
+            ],
             "cover_letter": ["cover letter", "dear hiring manager", "dear recruiter"],
-            "education": ["education", "academic background", "qualifications"],
-            "experience": ["experience", "work experience", "employment history", "professional experience"],
-            "skills": ["skills", "technical skills", "core competencies", "expertise"],
-            "certifications": ["certifications", "licenses", "courses"],
-            "projects": ["projects", "portfolio", "publications", "open source"],
-            "languages": ["languages", "language proficiency"],
+            "education": [
+                "education", "academic background", "qualifications", "academic qualifications",
+                "educational background", "academic history", "education & qualifications"
+            ],
+            "experience": [
+                "experience", "work experience", "employment history", "professional experience",
+                "work history", "professional background", "employment", "career history",
+                "relevant experience", "professional experience"
+            ],
+            "skills": [
+                "skills", "technical skills", "core competencies", "expertise",
+                "technical competencies", "key skills", "professional skills",
+                "competencies", "areas of expertise", "skill set"
+            ],
+            "certifications": [
+                "certifications", "licenses", "courses", "certificates",
+                "professional certifications", "credentials", "qualifications"
+            ],
+            "projects": [
+                "projects", "portfolio", "publications", "open source",
+                "personal projects", "key projects", "project experience",
+                "notable projects", "side projects"
+            ],
+            "languages": [
+                "languages", "language proficiency", "language skills",
+                "spoken languages", "language abilities"
+            ],
         }
         self.skill_keywords = [
             "python", "java", "javascript", "typescript", "react", "angular", "vue",

@@ -1,3 +1,4 @@
+// Dashboard.js - Updated with main menu in top bar
 import React, { useEffect, useState } from 'react';
 import './Dashboard.css';
 import CandidateProfile from './CandidateProfile';
@@ -24,6 +25,7 @@ import RecruiterDashboard from './RecruiterDashboard';
 import NotificationsPanel from './Notifications';
 import Settings from './Settings';
 import ChatBot from './ChatBot';
+import logo from './image-logo/zabalaza_logo_clean_circle.png';
 
 import {
   LineChart, Line, BarChart, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -61,15 +63,19 @@ const Icon = ({ name, size = 18, color = 'currentColor', strokeWidth = 1.8 }) =>
   return <svg {...common}>{paths[name] || paths.star}</svg>;
 };
 
-const navItems = [
+// Main navigation items for the top bar
+const mainNavItems = [
   { id: 'overview', label: 'Dashboard', icon: 'home' },
-  { id: 'jobs', label: 'Find jobs', icon: 'search' },
-  { id: 'applications', label: 'Applications', icon: 'briefcase' },
-  { id: 'saved', label: 'Saved jobs', icon: 'bookmark' },
-  { id: 'coach', label: 'Career coach', icon: 'chat' },
+  { id: 'jobs', label: 'Find Jobs', icon: 'search' },
   { id: 'discover', label: 'Discover', icon: 'spark' },
-  { id: 'insights', label: 'Insights', icon: 'graph'},
+  { id: 'coach', label: 'Career Coach', icon: 'chat' },
   { id: 'settings', label: 'Settings', icon: 'settings' },
+];
+
+const secondaryNavItems = [
+    { id: 'applications', label: 'Applications', icon: 'briefcase' },
+    { id: 'saved', label: 'Saved Jobs', icon: 'bookmark' },
+    { id: 'insights', label: 'Insights', icon: 'graph' },
 ];
 
 const toneClass = ['coral', 'yellow', 'sage', 'sky', 'rose'];
@@ -136,7 +142,7 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
 
   useEffect(() => {
     if (!applications || !Array.isArray(applications) || applications.length === 0) return;
-    
+
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
     const currentMonth = new Date().getMonth();
     const trendData = [];
@@ -192,7 +198,6 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
             <button className="retro-ghost-button" onClick={() => {
-              // Refresh data
               fetchDashboardData({ silent: true });
             }}>
               <Icon name="spark" /> Refresh
@@ -204,39 +209,39 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
           {[
             {
               label: 'Total Applications',
-              value: displayAnalytics.applications.value,
+              value: displayAnalytics?.applications?.value ?? 0,
               delta: 'vs last month',
               icon: 'doc',
               tone: 'coral',
-              trend: displayAnalytics.applications.positive,
-              change: displayAnalytics.applications.change
+              trend: displayAnalytics?.applications?.positive,
+              change: displayAnalytics?.applications?.change
             },
             {
               label: 'Interviews',
-              value: displayAnalytics.interviews.value,
+              value: displayAnalytics?.interviews?.value ?? 0,
               delta: 'scheduled',
               icon: 'calendar',
               tone: 'yellow',
-              trend: displayAnalytics.interviews.positive,
-              change: displayAnalytics.interviews.change
+              trend: displayAnalytics?.interviews?.positive,
+              change: displayAnalytics?.interviews?.change
             },
             {
               label: 'Response Rate',
-              value: `${displayAnalytics.responseRate.value}%`,
+              value: `${displayAnalytics?.responseRate?.value ?? 0}%`,
               delta: 'vs average',
               icon: 'trend',
               tone: 'sage',
-              trend: displayAnalytics.responseRate.positive,
-              change: displayAnalytics.responseRate.change
+              trend: displayAnalytics?.responseRate?.positive,
+              change: displayAnalytics?.responseRate?.change
             },
             {
               label: 'Active Offers',
-              value: displayAnalytics.offers.value,
+              value: displayAnalytics?.offers?.value ?? 0,
               delta: 'pending',
               icon: 'star',
               tone: 'sky',
-              trend: displayAnalytics.offers.positive,
-              change: displayAnalytics.offers.change
+              trend: displayAnalytics?.offers?.positive,
+              change: displayAnalytics?.offers?.change
             },
           ].map((stat) => (
             <article className="retro-card retro-stat-card insight-stat" key={stat.label}>
@@ -380,13 +385,10 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
     );
   };
 
-
-  // Update the renderOverview function to remove the stats cards
   const renderOverview = () => (
     <div className="retro-page">
       <div className="retro-page-header">
         <div>
-          <p className="retro-muted">Welcome back</p>
           <h1>
             Hey {displayUserProfile.first_name?.split(' ')[0] ||
             displayUserProfile.firstName?.split(' ')[0] ||
@@ -408,8 +410,6 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
         </div>
         <button className="retro-primary-button" onClick={handleFindJobs}>Find Jobs</button>
       </section>
-
-      {/* Stats Cards Removed - They're now in Insights */}
 
       <div className="retro-content-grid">
         <section className="retro-card retro-section-card">
@@ -450,30 +450,33 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
         </section>
       </div>
 
-      <section className="retro-card retro-section-card">
-        <div className="retro-section-header">
-          <h2>Recent applications</h2>
-          <select className="retro-select" value={selectedFilter} onChange={(event) => setSelectedFilter(event.target.value)}>
-            <option value="all">All Status</option>
-            <option value="applied">Applied</option>
-            <option value="interview">Interview</option>
-            <option value="offer">Offer</option>
-          </select>
-        </div>
-        <div className="retro-application-grid">
-          {filteredApplications.slice(0, 4).map((app, index) => (
-            <article className="retro-application-card" key={app.id}>
-              <CompanyBadge text={app.companyLogo} tone={toneClass[index % toneClass.length]} size={40} />
-              <div>
-                <strong>{app.position}</strong>
-                <span>{app.company}</span>
-              </div>
-              <Pill tone={app.status === 'interview_scheduled' ? 'sage' : 'yellow'} filled>{app.status?.replace('_', ' ') || 'Applied'}</Pill>
-            </article>
-          ))}
-          {filteredApplications.length === 0 && <div className="retro-empty"><Icon name="briefcase" />No applications yet.</div>}
-        </div>
-      </section>
+        <section className="retro-card retro-section-card">
+          <div className="retro-section-header">
+            <h2>Recent applications</h2>
+            <select className="retro-select" value={selectedFilter} onChange={(event) => setSelectedFilter(event.target.value)}>
+              <option value="all">All Status</option>
+              <option value="applied">Applied</option>
+              <option value="interview">Interview</option>
+              <option value="offer">Offer</option>
+            </select>
+          </div>
+          <div className="retro-application-grid">
+            {(filteredApplications || []).slice(0, 4).map((app, index) => (
+              <article className="retro-application-card" key={app.id}>
+                {/*<CompanyBadge text={app.companyLogo} tone={toneClass[index % toneClass.length]} size={40} />*/}
+                <div>
+                  <strong>{app.position}</strong>
+                  <span>{app.company}</span>
+                  <span>{app.location}</span>
+                  <span>{app.workType}</span>
+                  <span>{app.salary}</span>
+                </div>
+                <Pill tone={app.status === 'interview_scheduled' ? 'sage' : 'yellow'} filled>{app.status?.replace('_', ' ') || 'Applied'}</Pill>
+              </article>
+            ))}
+            {(filteredApplications || []).length === 0 && <div className="retro-empty"><Icon name="briefcase" />No applications yet.</div>}
+          </div>
+        </section>
 
       {insights.length > 0 && (
         <section className="retro-card retro-section-cards">
@@ -494,7 +497,6 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
     </div>
     )
 
-
   const fetchDashboardData = async ({ silent = false } = {}) => {
     try {
       if (!silent) setLoading(true);
@@ -506,6 +508,37 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
         return;
       }
 
+      // Check if user is a recruiter - if so, skip candidate-specific data
+      const userData = localStorage.getItem('user_data');
+      const userRole = userData ? JSON.parse(userData).role : null;
+      
+      if (userRole === 'recruiter') {
+        // Recruiters don't have candidate profiles, skip candidate data fetching
+        setCandidateProfile(null);
+        setApplications([]);
+        setAnalytics(null);
+        setInsights([]);
+        setRecommendations([]);
+        setUserProfile({
+          name: currentUser.full_name || currentUser.username,
+          title: 'Recruiter',
+          avatar: 'R',
+          profileComplete: 0,
+        });
+        
+        // Still fetch notifications for recruiters
+        try {
+          const notificationsData = await getNotifications().catch(() => []);
+          setNotifications(Array.isArray(notificationsData) ? notificationsData : []);
+        } catch {
+          setNotifications([]);
+        }
+        
+        if (!silent) setLoading(false);
+        return;
+      }
+
+      // Candidate-specific data fetching
       const profile = await getCandidateProfile();
       const apps = await getMyApplications();
       const jobs = await getJobs();
@@ -721,20 +754,16 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
     if (label === 'Post a Job') {
       setActiveView('post-job');
     } else if (label === 'Create a Company page') {
-      // Show company registration/login form
       setActiveView('company-page');
     } else if (label === 'Job posting account') {
-      // Check if user has recruiter jobs, if not redirect to company registration
       const currentUser = getCurrentUser();
       const userData = localStorage.getItem('user_data');
       const userRole = currentUser?.role || (userData ? JSON.parse(userData).role : null);
-      
+
       if (userRole === 'recruiter') {
-        // Already a recruiter, go to the recruiter analytics dashboard
         setActiveView('recruiter-analytics');
         fetchRecruiterJobs();
       } else {
-        // Not registered as recruiter yet, show registration form
         setActiveView('company-page');
       }
     }
@@ -1184,7 +1213,6 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
   );
 
   const handleRegistrationComplete = () => {
-    // After successful company registration/login, go to recruiter dashboard
     setActiveView('recruiter-analytics');
     fetchRecruiterJobs();
   };
@@ -1267,70 +1295,89 @@ function Dashboard({ onLogout, theme, onThemeChange }) {
     return <RecruiterDashboard onLogout={onLogout} />;
   }
 
-  return (
-    <div className="dashboard retro-app-shell">
-      {showProfile && <CandidateProfile onClose={() => setShowProfile(false)} onProfileUpdated={() => fetchDashboardData({ silent: true })} />}
+  // Return section of Dashboard.js - With sidebar for secondary nav
+return (
+  <div className="dashboard retro-app-shell">
+    {showProfile && <CandidateProfile onClose={() => setShowProfile(false)} onProfileUpdated={() => fetchDashboardData({ silent: true })} />}
 
-      <header className="retro-topbar">
-        <div className="retro-logo">
-          <div className="retro-logo-mark">
-            <img
-              src="%PUBLIC_URL%/zabalaza_logo_circle.png"
-              alt="Logo"
-              className="logo-image"
-            />
-          </div>
-          <span>Zabalaza</span>
+    {/* TOP BAR - Full width with main navigation */}
+    <header className="retro-topbar">
+      <div className="retro-logo">
+        <div className="retro-logo-mark">
+          <img src={logo} alt="Logo" className="logo-image" />
         </div>
-        <div className="retro-top-actions">
-          <div className="business-menu-wrapper">
-            <button className={`retro-ghost-button business-trigger ${showBusinessMenu ? 'open' : ''}`} onClick={() => setShowBusinessMenu((value) => !value)}>
-              <Icon name="building" />Business<Icon name="chevDown" size={14} />
-            </button>
-            {showBusinessMenu && (
-              <div className="business-dropdown">
-                {businessActions.map((action) => (
-                  <button key={action.label} className="business-dropdown-item" onClick={() => handleBusinessAction(action.label)}>
-                    <span className="business-dropdown-title">{action.label}</span>
-                    <span className="business-dropdown-description">{action.description}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <button className="retro-icon-button" onClick={() => setActiveView('notifications')} aria-label="Notifications">
-            <Icon name="bell" />
-            {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
-          </button>
-          <button className="retro-user-chip" onClick={() => setShowProfile(true)}>
-            <span className="retro-avatar">{displayUserProfile.avatar || <Icon name="user" size={16} />}</span>
-            <span className="retro-user-copy">
-              <strong>{displayUserProfile.name}</strong>
-              <small>{displayUserProfile.title}</small>
-            </span>
-            <Icon name="chevDown" size={14} color="var(--ink-mute)" />
-          </button>
-          <button className="retro-ghost-button" onClick={onLogout}>Logout</button>
-        </div>
-      </header>
-
-      <div className="retro-workspace">
-        <aside className="retro-sidebar">
-          <nav>
-            {navItems.map((item) => (
-              <button key={item.id} className={`retro-nav-item ${activeView === item.id ? 'active' : ''}`} onClick={() => setActiveView(item.id)}>
-                <Icon name={item.icon} />{item.label}
-              </button>
-            ))}
-          </nav>
-        </aside>
-
-        <main className="retro-main">
-          {renderContent()}
-        </main>
+        <span>Zabalaza</span>
       </div>
+
+      {/* Main Navigation - centered in top bar */}
+      <nav className="retro-main-nav">
+        {mainNavItems.map((item) => (
+          <button
+            key={item.id}
+            className={`retro-nav-item ${activeView === item.id ? 'active' : ''}`}
+            onClick={() => setActiveView(item.id)}
+          >
+            <Icon name={item.icon} size={16} />
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      <div className="retro-top-actions">
+        <div className="business-menu-wrapper">
+          <button className={`retro-ghost-button business-trigger ${showBusinessMenu ? 'open' : ''}`} onClick={() => setShowBusinessMenu((value) => !value)}>
+            <Icon name="building" />Business<Icon name="chevDown" size={14} />
+          </button>
+          {showBusinessMenu && (
+            <div className="business-dropdown">
+              {businessActions.map((action) => (
+                <button key={action.label} className="business-dropdown-item" onClick={() => handleBusinessAction(action.label)}>
+                  <span className="business-dropdown-title">{action.label}</span>
+                  <span className="business-dropdown-description">{action.description}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <button className="retro-icon-button" onClick={() => setActiveView('notifications')} aria-label="Notifications">
+          <Icon name="bell" />
+          {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
+        </button>
+        <button className="retro-user-chip" onClick={() => setShowProfile(true)}>
+          <span className="retro-avatar">{displayUserProfile.avatar || <Icon name="user" size={16} />}</span>
+          <span className="retro-user-copy">
+            <strong>{displayUserProfile.name}</strong>
+            <small>{displayUserProfile.title}</small>
+          </span>
+          <Icon name="chevDown" size={14} color="var(--ink-mute)" />
+        </button>
+        <button className="retro-ghost-button" onClick={onLogout}>Logout</button>
+      </div>
+    </header>
+
+    {/* SIDEBAR with secondary navigation + Main content */}
+    <div className="retro-workspace">
+      <aside className="retro-sidebar">
+        <nav>
+          {secondaryNavItems.map((item) => (
+            <button
+              key={item.id}
+              className={`retro-nav-item ${activeView === item.id ? 'active' : ''}`}
+              onClick={() => setActiveView(item.id)}
+            >
+              <Icon name={item.icon} size={18} />
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      <main className="retro-main">
+        {renderContent()}
+      </main>
     </div>
-  );
+  </div>
+);
 }
 
 export { Icon };

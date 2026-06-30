@@ -252,6 +252,50 @@ async def upload_resume(
     db.commit()
     db.refresh(candidate)
 
+    # Automatically trigger job matching for the candidate
+    try:
+        from ..services.matching_engine import MatchingEngine
+        engine = MatchingEngine()
+        
+        # Get all active jobs
+        active_jobs = db.query(Job).filter(Job.status == JobStatus.ACTIVE).all()
+        
+        if active_jobs and candidate.embedding:
+            candidate_embedding = json.loads(candidate.embedding)
+            matches_found = 0
+            
+            for job in active_jobs:
+                if job.embedding:
+                    try:
+                        job_embedding = json.loads(job.embedding)
+                        job_dict = {
+                            'id': job.id,
+                            'title': job.title,
+                            'description': job.description,
+                            'requirements': job.requirements,
+                            'experience_level': job.experience_level,
+                            'location': job.location,
+                            'skills': job.skills
+                        }
+                        
+                        match_score, match_explanation = engine.match_candidate_to_job(
+                            candidate_embedding,
+                            job_embedding,
+                            candidate_dict,
+                            job_dict
+                        )
+                        
+                        # Store match if score is above 60%
+                        if match_score >= 0.6:
+                            matches_found += 1
+                    except Exception:
+                        continue
+            
+            print(f"✅ Auto-matching complete: Found {matches_found} jobs with 60%+ match for candidate {candidate.id}")
+    except Exception as e:
+        print(f"⚠️ Auto-matching failed: {e}")
+        # Continue even if matching fails
+
     # Return a response payload compatible with CandidateSchema
     response_data = {
         "id": candidate.id,

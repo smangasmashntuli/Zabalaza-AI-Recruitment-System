@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import './Login.css';
 import { loginUser, resetPassword } from './api/auth';
+import logo from './image-logo/zabalaza_logo_full_lockup.png';
 
-const Login = ({onSwitchToSignUp}) => {
+const Login = ({ onSwitchToSignUp }) => {
     const [formData, setFormData] = useState({
         email: '',
         password: ''
@@ -19,55 +20,49 @@ const Login = ({onSwitchToSignUp}) => {
     const [isResetting, setIsResetting] = useState(false);
 
     const handleChange = (e) => {
-        const {name, value } = e.target;
-        setFormData({...formData, [name]: value});
+        const { name, value } = e.target;
+        setFormData({ ...formData, [name]: value });
         if (errors[name]) {
             setErrors({
                 ...errors,
                 [name]: ''
             });
         }
-        // Clear API error when user types
         if (apiError) {
             setApiError('');
         }
     };
 
-    const validatForm = () => {
+    const validateForm = () => {
         const newErrors = {};
-
         if (!formData.email) {
             newErrors.email = 'Email is required';
         } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
             newErrors.email = 'Invalid email address';
         }
-
         if (!formData.password) {
             newErrors.password = 'Password is required';
         } else if (formData.password.length < 6) {
             newErrors.password = 'Password must be at least 6 characters';
         }
-
         return newErrors;
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const newErrors = validatForm();
-
-        if(Object.keys(newErrors).length === 0){
+        const newErrors = validateForm();
+        if (Object.keys(newErrors).length === 0) {
             setIsSubmitting(true);
             setApiError('');
-
             try {
                 const response = await loginUser(formData.email, formData.password);
                 console.log('Login successful:', response);
-
-                // Store tokens in localStorage
-                localStorage.setItem('access_token', response.access_token);
-                localStorage.setItem('refresh_token', response.refresh_token);
-
-                // Reload the page to trigger auth check in App.js
+                
+                // Store user role if provided
+                if (response.user && response.user.role) {
+                    localStorage.setItem('user_data', JSON.stringify(response.user));
+                }
+                
                 window.location.reload();
             } catch (error) {
                 console.error('Login error:', error);
@@ -75,7 +70,7 @@ const Login = ({onSwitchToSignUp}) => {
             } finally {
                 setIsSubmitting(false);
             }
-        } else{
+        } else {
             setErrors(newErrors);
         }
     };
@@ -84,28 +79,21 @@ const Login = ({onSwitchToSignUp}) => {
         e.preventDefault();
         setResetError('');
         setResetSuccess('');
-
-        // Validate passwords match
         if (newPassword !== confirmPassword) {
             setResetError('Passwords do not match');
             return;
         }
-
         if (newPassword.length < 6) {
             setResetError('Password must be at least 6 characters');
             return;
         }
-
         setIsResetting(true);
-
         try {
             await resetPassword(resetEmail, newPassword);
             setResetSuccess('Password reset successful! You can now login with your new password.');
             setResetEmail('');
             setNewPassword('');
             setConfirmPassword('');
-            
-            // Close modal after 2 seconds
             setTimeout(() => {
                 setShowResetModal(false);
                 setResetSuccess('');
@@ -118,17 +106,27 @@ const Login = ({onSwitchToSignUp}) => {
     };
 
     return (
-        <div className="login-container">
-            <div className="login-card">
-                <div className="login-header">
-                    <h2>Welcome Back</h2>
-                    <p>Please login to your account</p>
+        <div className="login-wrapper">
+            <div className="brand-top">
+                <img
+                    /*src="image-logo/zabalaza_logo_full_lockup.png"*/
+                    src={logo}
+                    alt="Zabalaza Logo"
+                    className="brand-logo"
+                />
+                <div className="brand-text">
+                    <span className="brand-slogan">Where talent meets opportunity, instantly.</span>
                 </div>
+            </div>
+
+            {/* Login container */}
+            <div className="login-card">
+                <h2 className="welcome">Login to Zabalaza</h2>
 
                 <form onSubmit={handleSubmit} className="login-form">
                     {apiError && <div className="api-error-message">{apiError}</div>}
 
-                    <div className="form-group">
+                    <div className="input-group">
                         <label htmlFor="email">Email address</label>
                         <input
                             type="email"
@@ -139,10 +137,11 @@ const Login = ({onSwitchToSignUp}) => {
                             className={errors.email ? 'error' : ''}
                             placeholder="Enter your email"
                             autoComplete="email"
-                            />
+                        />
                         {errors.email && <span className="error-message">{errors.email}</span>}
                     </div>
-                    <div className="form-group">
+
+                    <div className="input-group">
                         <label htmlFor="password">Password</label>
                         <input
                             type="password"
@@ -156,15 +155,15 @@ const Login = ({onSwitchToSignUp}) => {
                         />
                         {errors.password && <span className="error-message">{errors.password}</span>}
                     </div>
-                    <div className="form-options">
+
+                    <div className="row-remember">
                         <label className="remember-me">
                             <input type="checkbox" />
                             <span>Remember me</span>
                         </label>
-                        <button 
-                            type="button" 
-                            className="forgot-password" 
-                            style={{ background: 'none', border: 'none', padding: 0 }}
+                        <button
+                            type="button"
+                            className="forgot-link"
                             onClick={() => setShowResetModal(true)}
                         >
                             Forgot password?
@@ -173,82 +172,91 @@ const Login = ({onSwitchToSignUp}) => {
 
                     <button
                         type="submit"
-                        className="login-button"
+                        className="login-btn"
                         disabled={isSubmitting}
                     >
-                    {isSubmitting ? 'Logging in...' : 'Login'}
+                        {isSubmitting ? 'Logging in...' : 'Login'}
                     </button>
                 </form>
-                <div className="login-footer">
-          <p>Don't have an account? <button type="button" className="forgot-password" style={{ background: 'none', border: 'none', padding: 0 }} onClick={onSwitchToSignUp}>Sign up</button></p>
-        </div>
-      </div>
 
-      {/* Password Reset Modal */}
-      {showResetModal && (
-        <div className="modal-overlay" onClick={() => setShowResetModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Reset Password</h3>
-              <button type="button" className="close-button" onClick={() => setShowResetModal(false)}>✕</button>
+                <div className="signup-row">
+                    <p>Don't have an account?
+                        <button
+                            type="button"
+                            className="signup-link"
+                            onClick={onSwitchToSignUp}
+                        >
+                            Sign up
+                        </button>
+                    </p>
+                </div>
             </div>
-            
-            <form onSubmit={handleResetPassword} className="reset-password-form">
-              {resetError && <div className="api-error-message">{resetError}</div>}
-              {resetSuccess && <div className="success-message">{resetSuccess}</div>}
-              
-              <div className="form-group">
-                <label htmlFor="resetEmail">Email address</label>
-                <input
-                  type="email"
-                  id="resetEmail"
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  placeholder="Enter your registered email"
-                  required
-                />
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="newPassword">New Password</label>
-                <input
-                  type="password"
-                  id="newPassword"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Enter new password (min 6 characters)"
-                  required
-                  minLength={6}
-                />
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="confirmPassword">Confirm New Password</label>
-                <input
-                  type="password"
-                  id="confirmPassword"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Re-enter new password"
-                  required
-                  minLength={6}
-                />
-              </div>
-              
-              <div className="form-actions">
-                <button type="submit" className="login-button" disabled={isResetting}>
-                  {isResetting ? 'Resetting...' : 'Reset Password'}
-                </button>
-                <button type="button" className="cancel-button" onClick={() => setShowResetModal(false)}>
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
+
+            {/* Password Reset Modal */}
+            {showResetModal && (
+                <div className="modal-overlay" onClick={() => setShowResetModal(false)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>Reset Password</h3>
+                            <button type="button" className="close-button" onClick={() => setShowResetModal(false)}>✕</button>
+                        </div>
+
+                        <form onSubmit={handleResetPassword} className="reset-password-form">
+                            {resetError && <div className="api-error-message">{resetError}</div>}
+                            {resetSuccess && <div className="success-message">{resetSuccess}</div>}
+
+                            <div className="input-group">
+                                <label htmlFor="resetEmail">Email address</label>
+                                <input
+                                    type="email"
+                                    id="resetEmail"
+                                    value={resetEmail}
+                                    onChange={(e) => setResetEmail(e.target.value)}
+                                    placeholder="Enter your registered email"
+                                    required
+                                />
+                            </div>
+
+                            <div className="input-group">
+                                <label htmlFor="newPassword">New Password</label>
+                                <input
+                                    type="password"
+                                    id="newPassword"
+                                    value={newPassword}
+                                    onChange={(e) => setNewPassword(e.target.value)}
+                                    placeholder="Enter new password (min 6 characters)"
+                                    required
+                                    minLength={6}
+                                />
+                            </div>
+
+                            <div className="input-group">
+                                <label htmlFor="confirmPassword">Confirm New Password</label>
+                                <input
+                                    type="password"
+                                    id="confirmPassword"
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    placeholder="Re-enter new password"
+                                    required
+                                    minLength={6}
+                                />
+                            </div>
+
+                            <div className="modal-actions">
+                                <button type="submit" className="login-btn" disabled={isResetting}>
+                                    {isResetting ? 'Resetting...' : 'Reset Password'}
+                                </button>
+                                <button type="button" className="cancel-btn" onClick={() => setShowResetModal(false)}>
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
-      )}
-    </div>
-  );
+    );
 };
 
 export default Login;

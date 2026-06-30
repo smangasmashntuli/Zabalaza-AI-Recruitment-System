@@ -206,15 +206,43 @@ def get_job_applications(
             detail="Not authorized to view these applications"
         )
 
-    from models import Application, Candidate
+    from ..models import Application, Candidate
     applications = db.query(Application).filter(Application.job_id == job_id).all()
 
     result = []
     for app in applications:
         candidate = db.query(Candidate).filter(Candidate.id == app.candidate_id).first()
         candidate_user = db.query(User).filter(User.id == candidate.user_id).first() if candidate else None
+        
+        # Get the PDF path from candidate's resume_path
+        pdf_path = candidate.resume_path if candidate and candidate.resume_path else None
+        
+        # Generate candidate summary
+        summary = "No summary available"
+        try:
+            from ..services.ai_service import ai_service
+            candidate_dict = {
+                'resume_text': candidate.resume_text or '',
+                'skills': candidate.skills or '[]',
+                'experience_years': candidate.experience_years or 0,
+                'education': candidate.education or '[]',
+                'work_experience': candidate.work_experience or '[]'
+            }
+            job_dict = {
+                'title': job.title,
+                'description': job.description,
+                'requirements': job.requirements,
+                'experience_level': job.experience_level
+            }
+            summary = ai_service.generate_candidate_summary(candidate_dict, job_dict, app.match_score or 0)
+        except Exception as e:
+            print(f"Error generating summary: {e}")
+            summary = f"Candidate with {candidate.experience_years or 0} years experience. Match score: {int((app.match_score or 0) * 100)}%"
+        
         result.append({
             "id": app.id,
+            "job_id": app.job_id,
+            "job_title": job.title,
             "candidate_id": app.candidate_id,
             "candidate_name": f"{candidate_user.first_name or ''} {candidate_user.last_name or ''}".strip() if candidate_user else "Unknown",
             "candidate_email": candidate_user.email if candidate_user else "",
@@ -222,6 +250,8 @@ def get_job_applications(
             "match_score": app.match_score or 0,
             "cover_letter": app.cover_letter,
             "applied_at": app.applied_at,
+            "resume_path": pdf_path,
+            "summary": summary,
         })
     result.sort(key=lambda x: x["status"], reverse=True)
 

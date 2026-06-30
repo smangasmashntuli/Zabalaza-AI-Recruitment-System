@@ -25,11 +25,14 @@ export default function NotificationsPanel({ notifications: initialNotifications
     setNotifications(initialNotifications);
   }, [initialNotifications]);
 
+  // Only auto-load if no initial notifications provided
   useEffect(() => {
-    loadNotifications();
+    if (initialNotifications.length === 0) {
+      loadNotifications();
+    }
     const interval = window.setInterval(loadNotifications, 60000);
     return () => window.clearInterval(interval);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleMarkRead = async (notificationId) => {
     try {
