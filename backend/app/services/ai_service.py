@@ -1,5 +1,7 @@
 from typing import Dict, List, Optional
 import json
+import re
+
 from .resume_parser import ResumeParser
 from .matching_engine import MatchingEngine
 from .gemini_service import get_gemini_service
@@ -16,6 +18,77 @@ class AIService:
             self.gemini_service = get_gemini_service()
         except Exception:
             self.gemini_service = None
+
+    def generate_candidate_summary(self, candidate_dict: Dict, job_dict: Dict, match_score: float) -> str:
+        """Generate a concise summary of the candidate for recruiters.
+        
+        Focuses on candidate's strengths and experience rather than just the match score.
+        """
+        try:
+            # Extract key information
+            skills = []
+            try:
+                skills = json.loads(candidate_dict.get('skills', '[]')) if isinstance(candidate_dict.get('skills'), str) else candidate_dict.get('skills', [])
+            except:
+                skills = []
+            
+            experience_years = candidate_dict.get('experience_years', 0)
+            resume_text = candidate_dict.get('resume_text', '')[:500]
+            
+            # Get candidate name from resume text
+            name = "This candidate"
+            name_match = re.search(r'^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)', resume_text, re.MULTILINE)
+            if name_match:
+                name = name_match.group(1)
+            
+            # Extract job title from candidate profile
+            title = candidate_dict.get('title', 'Professional')
+            
+            # Build summary
+            summary_parts = []
+            
+            # Experience summary
+            if experience_years > 0:
+                summary_parts.append(f"{name} has {experience_years:.1f} years of experience")
+            else:
+                summary_parts.append(f"{name} is an aspiring {title.lower()}")
+            
+            # Skills highlight
+            if skills:
+                top_skills = skills[:5]
+                summary_parts.append(f"with expertise in {', '.join(top_skills)}")
+            
+            # Education
+            try:
+                education = json.loads(candidate_dict.get('education', '[]')) if isinstance(candidate_dict.get('education'), str) else candidate_dict.get('education', [])
+                if education and isinstance(education, list) and len(education) > 0:
+                    highest_edu = education[0]
+                    degree = highest_edu.get('degree', '')
+                    if degree:
+                        summary_parts.append(f"holds a {degree}")
+            except:
+                pass
+            
+            # Match context
+            match_pct = int(match_score * 100)
+            if match_pct >= 70:
+                summary_parts.append(f"and demonstrates strong alignment with this role ({match_pct}% match)")
+            elif match_pct >= 50:
+                summary_parts.append(f"with potential for this position ({match_pct}% match)")
+            else:
+                summary_parts.append(f"and may benefit from additional training for this role ({match_pct}% match)")
+            
+            summary = ". ".join(summary_parts) + "."
+            
+            # Keep it concise (max 200 chars)
+            if len(summary) > 200:
+                summary = summary[:197] + "..."
+            
+            return summary
+            
+        except Exception as e:
+            print(f"Error generating candidate summary: {e}")
+            return f"Candidate profile available. Match score: {int(match_score * 100)}%"
 
     def parse_resume(self, file_content: bytes, file_type: str, fast_mode: bool = True) -> Dict:
         """Parse resume and optionally refine with LLM.
