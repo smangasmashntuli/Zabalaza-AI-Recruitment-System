@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from . import auth, jobs, candidates, matches, uploads, generative, intelligence, recruiter
+from . import auth, jobs, candidates, matches, uploads, generative, intelligence, recruiter, visualize
 
 router = APIRouter()
 
@@ -12,6 +12,7 @@ router.include_router(uploads.router)
 router.include_router(generative.router, prefix="/generative", tags=["generative"])
 router.include_router(intelligence.router)
 router.include_router(recruiter.router)
+router.include_router(visualize.router)
 
 __all__ = ["router"]
 
@@ -23,5 +24,6 @@ __all__.extend([
     "uploads",
     "generative",
     "intelligence",
-    "recruiter"
+    "recruiter",
+    "visualize"
 ])
